@@ -1,0 +1,442 @@
+(function () {
+    "use strict";
+
+    function qsId(id) {
+        return document.getElementById(id);
+    }
+
+    function flashButtonText(btn, text, ms) {
+        if (!btn) {
+            return;
+        }
+
+        const original = btn.textContent;
+
+        btn.textContent = text;
+
+        window.setTimeout(function () {
+            btn.textContent = original;
+        }, ms);
+    }
+
+    function copyToClipboard(text) {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+            return navigator.clipboard.writeText(text);
+        }
+
+        return new Promise(function (resolve, reject) {
+            try {
+                const ta = document.createElement("textarea");
+
+                ta.value = text;
+                ta.setAttribute("readonly", "readonly");
+                ta.style.position = "fixed";
+                ta.style.left = "-9999px";
+
+                document.body.appendChild(ta);
+                ta.select();
+
+                const ok = document.execCommand("copy");
+
+                document.body.removeChild(ta);
+
+                if (!ok) {
+                    reject(new Error("copy failed"));
+                    return;
+                }
+
+                resolve();
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    function mapModeToPreset(modeValue) {
+        if (modeValue === "drop_lowest") {
+            return "lowest";
+        }
+
+        if (modeValue === "drop_highest") {
+            return "highest";
+        }
+
+        if (modeValue === "wild") {
+            return "wild";
+        }
+
+        if (modeValue === "stunt") {
+            return "stunt";
+        }
+
+        return "none";
+    }
+
+    function getInputValue(idA, idB) {
+        const el = qsId(idA) || qsId(idB);
+
+        if (!el) {
+            return "";
+        }
+
+        return String(el.value || "");
+    }
+
+    function getSelectValue(id) {
+        const el = qsId(id);
+
+        if (!el) {
+            return "";
+        }
+
+        return String(el.value || "");
+    }
+
+    function getChecked(id) {
+        const el = qsId(id);
+
+        if (!el) {
+            return false;
+        }
+
+        return Boolean(el.checked);
+    }
+
+    function buildPresetUrl() {
+        const dq = getSelectValue("dice_count");
+        const dieA = getSelectValue("die_type");
+        const dm = getInputValue("mod").trim();
+        const dd = mapModeToPreset(getSelectValue("mode"));
+
+        const mdq = getSelectValue("dice_count_b");
+        const dieB = getSelectValue("die_type_b");
+        const mdm = getInputValue("mod_b");
+        const mdd = mapModeToPreset(getSelectValue("mode_b"));
+
+        const dt = getSelectValue("repeat");
+        const sdt = getChecked("sort_results") ? "1" : "";
+
+        let ds = "";
+        let df = "";
+
+        if (dieA === "d6f") {
+            ds = "6";
+            df = "1";
+        } else if (/^d\d+$/.test(dieA)) {
+            ds = dieA.replace(/^d/, "");
+        }
+
+        let mds = "";
+
+        if (/^d\d+$/.test(dieB)) {
+            mds = dieB.replace(/^d/, "");
+        }
+
+        const params = new URLSearchParams();
+
+        if (dq !== "") {
+            params.set("dq", dq);
+        }
+
+        if (ds !== "") {
+            params.set("ds", ds);
+        }
+
+        if (dm !== "") {
+            params.set("dm", dm);
+        }
+
+        if (dd !== "") {
+            params.set("dd", dd);
+        }
+
+        if (df !== "") {
+            params.set("df", df);
+        }
+
+        if (mdq !== "") {
+            params.set("mdq", mdq);
+        }
+
+        if (mds !== "") {
+            params.set("mds", mds);
+        }
+
+        if (mdm !== "") {
+            params.set("mdm", mdm);
+        }
+
+        if (mdd !== "") {
+            params.set("mdd", mdd);
+        }
+
+        if (dt !== "") {
+            params.set("dt", dt);
+        }
+
+        if (sdt !== "") {
+            params.set("sdt", sdt);
+        }
+
+        const url = new URL(window.location.href);
+
+        url.search = params.toString();
+
+        return url.toString();
+    }
+
+    function setRowBDefaults(diceCountB, dieTypeB, modeB, modB) {
+        if (diceCountB) {
+            diceCountB.value = "0";
+        }
+
+        if (dieTypeB) {
+            dieTypeB.value = "d6";
+        }
+
+        if (modeB) {
+            modeB.value = "sum";
+        }
+
+        if (modB) {
+            modB.value = "0";
+        }
+    }
+
+    function applyUI() {
+        const diceCountA = qsId("dice_count");
+        const dieTypeA = qsId("die_type");
+        const modeA = qsId("mode");
+
+        const rowB = qsId("roll-b");
+        const diceCountB = qsId("dice_count_b");
+        const dieTypeB = qsId("die_type_b");
+        const modB = qsId("mod_b");
+        const modeB = qsId("mode_b");
+
+        if (!diceCountA || !dieTypeA || !modeA) {
+            return;
+        }
+
+        const row1IsFudge = (String(dieTypeA.value || "") === "d6f");
+
+        if (row1IsFudge) {
+            modeA.value = "sum";
+            modeA.disabled = true;
+        } else {
+            if (modeA.disabled) {
+                modeA.value = "sum";
+            }
+
+            modeA.disabled = false;
+        }
+
+        const row1IsStunt = (!row1IsFudge && String(modeA.value || "") === "stunt");
+        const row1IsWild = (!row1IsFudge && String(modeA.value || "") === "wild");
+
+        if (row1IsStunt) {
+            diceCountA.value = "3";
+            dieTypeA.value = "d6";
+            diceCountA.disabled = true;
+            dieTypeA.disabled = true;
+        } else {
+            diceCountA.disabled = false;
+            dieTypeA.disabled = false;
+        }
+
+        if (!row1IsStunt && row1IsWild) {
+            const n = parseInt(String(diceCountA.value || ""), 10);
+
+            if (!Number.isFinite(n) || n < 1) {
+                diceCountA.value = "1";
+            }
+
+            if (String(dieTypeA.value || "") !== "d6") {
+                dieTypeA.value = "d6";
+            }
+
+            dieTypeA.disabled = true;
+        }
+
+        const hideRowB = (row1IsFudge || row1IsWild || row1IsStunt);
+
+        if (rowB) {
+            rowB.classList.toggle("hidden", hideRowB);
+        }
+
+        if (diceCountB) {
+            diceCountB.disabled = hideRowB;
+        }
+
+        if (dieTypeB) {
+            dieTypeB.disabled = hideRowB;
+        }
+
+        if (modB) {
+            modB.disabled = hideRowB;
+        }
+
+        if (modeB) {
+            modeB.disabled = hideRowB;
+        }
+
+        if (hideRowB) {
+            setRowBDefaults(diceCountB, dieTypeB, modeB, modB);
+        }
+    }
+
+    function wireDiceUi() {
+        const dieTypeA = qsId("die_type");
+        const modeA = qsId("mode");
+        const diceCountA = qsId("dice_count");
+        const diceCountB = qsId("dice_count_b");
+
+        if (dieTypeA) {
+            dieTypeA.addEventListener("change", applyUI);
+        }
+
+        if (modeA) {
+            modeA.addEventListener("change", applyUI);
+        }
+
+        if (diceCountA) {
+            diceCountA.addEventListener("change", applyUI);
+        }
+
+        if (diceCountB) {
+            diceCountB.addEventListener("change", applyUI);
+        }
+
+        applyUI();
+    }
+
+    function prepareFormForReset() {
+        const diceCountA = qsId("dice_count");
+        const dieTypeA = qsId("die_type");
+        const modeA = qsId("mode");
+
+        const rowB = qsId("roll-b");
+        const diceCountB = qsId("dice_count_b");
+        const dieTypeB = qsId("die_type_b");
+        const modB = qsId("mod_b");
+        const modeB = qsId("mode_b");
+
+        if (diceCountA) {
+            diceCountA.disabled = false;
+        }
+
+        if (dieTypeA) {
+            dieTypeA.disabled = false;
+        }
+
+        if (modeA) {
+            modeA.disabled = false;
+        }
+
+        if (rowB) {
+            rowB.classList.remove("hidden");
+        }
+
+        if (diceCountB) {
+            diceCountB.disabled = false;
+        }
+
+        if (dieTypeB) {
+            dieTypeB.disabled = false;
+        }
+
+        if (modB) {
+            modB.disabled = false;
+        }
+
+        if (modeB) {
+            modeB.disabled = false;
+        }
+    }
+
+    function wireFloatingActions() {
+        const form = qsId("sd2-form");
+        const copyBtn = qsId("sd2-copy-url");
+        const resetBtn = qsId("sd2-reset");
+
+        if (copyBtn) {
+            copyBtn.addEventListener("click", function () {
+                const url = buildPresetUrl();
+
+                copyToClipboard(url)
+                    .then(function () {
+                        flashButtonText(copyBtn, "Copied!", 900);
+                    })
+                    .catch(function () {
+                        flashButtonText(copyBtn, "Copy Failed", 1200);
+                    });
+            });
+        }
+
+        if (resetBtn && form) {
+            resetBtn.addEventListener("click", function () {
+                prepareFormForReset();
+                form.reset();
+                applyUI();
+                flashButtonText(resetBtn, "Reset!", 900);
+            });
+        }
+    }
+
+    function wireResultsCopyButtons() {
+        const jsonTa = qsId("json-output");
+        const copyJson = qsId("copy-json");
+        const copyUrl = qsId("copy-url");
+        const copyMd5 = qsId("copy-md5");
+
+        if (copyJson && jsonTa) {
+            copyJson.addEventListener("click", function () {
+                const txt = String(jsonTa.value || "");
+
+                copyToClipboard(txt)
+                    .then(function () {
+                        flashButtonText(copyJson, "Copied!", 900);
+                    })
+                    .catch(function () {
+                        flashButtonText(copyJson, "Copy Failed", 1200);
+                    });
+            });
+        }
+
+        if (copyUrl) {
+            copyUrl.addEventListener("click", function () {
+                const txt = String(copyUrl.getAttribute("data-copy") || "");
+
+                copyToClipboard(txt)
+                    .then(function () {
+                        flashButtonText(copyUrl, "Copied!", 900);
+                    })
+                    .catch(function () {
+                        flashButtonText(copyUrl, "Copy Failed", 1200);
+                    });
+            });
+        }
+
+        if (copyMd5) {
+            copyMd5.addEventListener("click", function () {
+                const txt = String(copyMd5.getAttribute("data-copy") || "");
+
+                copyToClipboard(txt)
+                    .then(function () {
+                        flashButtonText(copyMd5, "Copied!", 900);
+                    })
+                    .catch(function () {
+                        flashButtonText(copyMd5, "Copy Failed", 1200);
+                    });
+            });
+        }
+    }
+
+    function init() {
+        wireDiceUi();
+        wireFloatingActions();
+        wireResultsCopyButtons();
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+})();
