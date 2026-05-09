@@ -13,7 +13,7 @@ function h(string $s): string
 }
 
 if (!is_array($data)) {
-    header("Location: index.php");
+    header("Location: securedice.php");
     exit;
 }
 
@@ -447,10 +447,10 @@ if ($sortResults) {
     $qs["sdt"] = 1;
 }
 
-$rollAgainUrl = "index.php?" . http_build_query($qs, "", "&", PHP_QUERY_RFC3986);
+$rollAgainUrl = "securedice.php?" . http_build_query($qs, "", "&", PHP_QUERY_RFC3986);
 $rollAgainAbs = build_absolute_url($rollAgainUrl);
 
-$rollPageUrl = build_absolute_url("index.php");
+$rollPageUrl = build_absolute_url("securedice.php");
 $exampleUrl = $rollPageUrl . "?" . http_build_query($qs, "", "&", PHP_QUERY_RFC3986);
 
 $jsonForUser = json_encode(

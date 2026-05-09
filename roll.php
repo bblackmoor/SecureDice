@@ -334,5 +334,5 @@ try {
     http_response_code(400);
 
     echo '<p>Error: ' . h($e->getMessage()) . '</p>';
-    echo '<p><a href="index.php">Back</a></p>';
+    echo '<p><a href="securedice.php">Back</a></p>';
 }

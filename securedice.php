@@ -148,7 +148,7 @@ if (($sdt = get_qi('sdt')) !== null && $sdt === 1) {
     $defaultSort = true;
 }
 
-$rollPageUrl  = build_absolute_url('index.php');
+$rollPageUrl  = build_absolute_url('securedice.php');
 $exampleQuery = 'dq=7&ds=4&dt=5&dd=highest&sdt=1';
 $exampleUrl   = $rollPageUrl . '?' . $exampleQuery;
 ?>

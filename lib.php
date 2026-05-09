@@ -44,7 +44,7 @@ function safe_bool($v): bool
 }
 
 /**
- * Build an absolute URL to a path in this app (e.g. "index.php").
+ * Build an absolute URL to a path in this app (e.g. "securedice.php").
  * Tries to respect reverse proxies via X-Forwarded-* headers when present.
  */
 function build_absolute_url(string $path): string

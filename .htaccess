@@ -1,0 +1,8 @@
+# Apache deployment settings for shared hosting.
+# Keeps the dice roller as the default entry point
+# and prevents MultiViews filename resolution issues.
+
+DirectoryIndex securedice.php
+
+RewriteEngine On
+Options -MultiViews
