@@ -84,9 +84,9 @@ In JSX or XHTML, use the syntax required by that environment.
 
 ## 2.3 Attribute Formatting
 
-If entire tag length ≤ 100 characters: - Keep on one line.
+If entire tag length ≤ 120 characters: - Keep on one line.
 
-If \> 100 characters: - Use multiline format.
+If \> 120 characters: - Use multiline format.
 
 Required multiline format:
 
@@ -233,14 +233,21 @@ Order must not be randomized.
 
 ## 4.1 File Structure
 
-All JS files must be wrapped in:
+All non-module JS files must be wrapped in an IIFE.
 
-``` js
+Allowed forms:
+
 (function () {
     "use strict";
 
 })();
-```
+
+(() => {
+    "use strict";
+
+})();
+
+Use one style consistently within the project.
 
 No global variables.
 
@@ -273,19 +280,26 @@ if (value == "sum") {
 
 ## 4.4 Braces
 
-All control structures must use braces.
+Control structures must use braces, except for simple guard-clause early returns.
 
-Incorrect:
+Allowed:
 
-``` js
-if (x) doThing();
+```js
+if (!el) return;
+if (value === null) return;
 ```
 
-Correct:
+Required:
 
-``` js
+```js
 if (x) {
     doThing();
+}
+
+if (x) {
+    doThing();
+} else {
+    doOtherThing();
 }
 ```
 
@@ -318,7 +332,6 @@ If `form.reset()` is used:
 
 -   It must restore initial DOM-defined values.
 -   It must re-trigger UI synchronization logic.
--   It must not reload the page.
 
 ------------------------------------------------------------------------
 
@@ -342,7 +355,6 @@ Projects should include:
 
 -   `.editorconfig`
 -   `.prettierrc`
--   `.eslintrc.json`
 -   `stylelint.config.js`
 
 All generated code must conform without manual reformatting.
