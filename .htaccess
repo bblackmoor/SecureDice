@@ -1,8 +1,16 @@
 # Apache deployment settings for shared hosting.
 # Keeps the dice roller as the default entry point
-# and prevents MultiViews filename resolution issues.
+# and redirects index.php requests to securedice.php
+# while preserving query strings and preventing
+# MultiViews filename resolution issues.
 
 DirectoryIndex securedice.php
 
 RewriteEngine On
 Options -MultiViews
+
+# Redirect explicit index.php requests to securedice.php
+# preserving any existing query string parameters
+
+RewriteCond %{THE_REQUEST} \s/+index\.php(?:\s|\?)
+RewriteRule ^index\.php$ securedice.php [R=301,L,QSA]

@@ -45,7 +45,7 @@ $modeLabels = [
     "stunt" => "Stunt die",
 ];
 
-$negativeChar = "−";
+$negativeChar = "-";
 $emdashChar = "—";
 
 function split_signed_int(int $v): array
@@ -53,7 +53,7 @@ function split_signed_int(int $v): array
     return [
         "is_negative" => ($v < 0),
         "abs" => abs($v),
-        "sign" => ($v < 0) ? "−" : "+",
+        "sign" => ($v < 0) ? "-" : "+",
     ];
 }
 
@@ -62,7 +62,7 @@ function format_signed_int_txt(int $v): string
     $parts = split_signed_int($v);
 
     if ($parts["is_negative"]) {
-        return "− " . (string) $parts["abs"];
+        return "- " . (string) $parts["abs"];
     }
 
     return "+ " . (string) $parts["abs"];
@@ -236,6 +236,36 @@ function format_dice_html(array $items, bool $sorted, string $context): string
     $tokens = format_dice_tokens($items, $sorted, $context);
 
     return render_tokens_html($tokens);
+}
+
+function render_die_chip_html(?array $item, string $emdashChar): string
+{
+    if (!is_array($item)) {
+        return "<span class=\"die-chip is-empty\">" . h($emdashChar) . "</span>";
+    }
+
+    $classes = ["die-chip"];
+
+    if (!empty($item["is_dropped"])) {
+        $classes[] = "is-dropped";
+    }
+
+    if (
+        !empty($item["is_stunt"])
+        || !empty($item["is_wild_initial"])
+        || !empty($item["is_wild_consequence"])
+    ) {
+        $classes[] = "is-special";
+    }
+
+    $text = (string) ((int) ($item["value"] ?? 0));
+
+    if (!empty($item["is_fudge"])) {
+        $parts = split_signed_int((int) ($item["value"] ?? 0));
+        $text = $parts["sign"] . " " . (string) $parts["abs"];
+    }
+
+    return "<span class=\"" . h(implode(" ", $classes)) . "\">" . h($text) . "</span>";
 }
 
 function render_modifier_html(int $mod): string
@@ -567,11 +597,7 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
                         <?php $it = $itemsA[$d] ?? null; ?>
                         <td class="col-dice">
                             <?php
-                            if (!is_array($it)) {
-                                echo " <span class=\"muted\">" . h($emdashChar) . "</span> ";
-                            } else {
-                                echo format_dice_html([$it], false, "cell");
-                            }
+							echo render_die_chip_html($it, $emdashChar);
                             ?>
                         </td>
                     <?php endfor; ?>
@@ -617,11 +643,7 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
                             <?php $it = $itemsB[$d] ?? null; ?>
                             <td class="col-dice">
                                 <?php
-                                if (!is_array($it)) {
-                                    echo " <span class=\"muted\">" . h($emdashChar) . "</span> ";
-                                } else {
-                                    echo format_dice_html([$it], false, "cell");
-                                }
+								echo render_die_chip_html($it, $emdashChar);
                                 ?>
                             </td>
                         <?php endfor; ?>
