@@ -158,7 +158,8 @@ $exampleUrl   = $rollPageUrl . '?' . $exampleQuery;
     <meta charset="utf-8">
     <title>Secure Dice</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="securedice.css">
+	<link rel="stylesheet" href="securedice.base.css">
+	<link rel="stylesheet" href="securedice.mobile.css">
     <script src="securedice.js" defer></script>
 </head>
 <body>

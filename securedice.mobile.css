@@ -1,0 +1,368 @@
+/* securedice.mobile.css */
+
+@media (max-width: 900px) {
+    body {
+        max-width: none;
+        padding: calc(44px + var(--sd2-whitespace-sm)) var(--sd2-whitespace-sm) var(--sd2-whitespace-sm);
+    }
+
+    .site-header {
+        margin-bottom: var(--sd2-whitespace-sm);
+    }
+
+    .site-title-wrap {
+        align-items: flex-start;
+        gap: var(--sd2-whitespace-xs) var(--sd2-whitespace-sm);
+    }
+
+    .site-title {
+        flex: 1 1 100%;
+        margin-top: 0;
+        font-size: var(--sd2-text-size-xl);
+    }
+
+    .site-subtitle {
+        margin-top: var(--sd2-whitespace-xs);
+        font-size: var(--sd2-text-size-sm);
+    }
+
+    .site-badges {
+        gap: var(--sd2-whitespace-xs);
+    }
+
+    .badge {
+        padding: 3px var(--sd2-whitespace-sm);
+        font-size: var(--sd2-text-size-xs);
+    }
+
+    .card {
+        margin: var(--sd2-whitespace-sm) 0;
+        padding: var(--sd2-whitespace-sm);
+    }
+
+    .floating-actions {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sd2-whitespace-xs);
+        width: auto;
+        margin: 0;
+        padding: var(--sd2-whitespace-xs);
+        background-image: var(--sd2-color-black);
+        box-shadow: 0 var(--sd2-whitespace-xs) var(--sd2-whitespace-md) rgba(0, 0, 0, 0.35);
+    }
+
+    .sd2-action-btn {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0.42rem 0.55rem;
+        font-size: var(--sd2-text-size-sm);
+        line-height: 1.05;
+        white-space: nowrap;
+    }
+
+    .sd2-action-btn:hover,
+    .sd2-action-btn:focus {
+        transform: none;
+    }
+
+    form > .card > table,
+    form > .card > table > tbody,
+    form > .card > table > tbody > tr,
+    form > .card > table > tbody > tr > td {
+        display: block;
+        width: 100%;
+    }
+
+    form > .card > table {
+        border-collapse: separate;
+    }
+
+    tr.roll-a,
+    tr.roll-b {
+        padding: 0;
+    }
+
+    tr.roll-a td,
+    tr.roll-b td,
+    tr.roll-a td.disabled,
+    tr.roll-b td.disabled {
+        padding: 0;
+    }
+
+    tr.roll-a td.col-num,
+    tr.roll-b td.col-num,
+    tr.roll-a td.col-dice,
+    tr.roll-b td.col-dice,
+    tr.roll-a td.col-mod,
+    tr.roll-b td.col-mod,
+    tr.roll-a td.col-mode,
+    tr.roll-b td.col-mode {
+        width: 100%;
+    }
+
+    tr.roll-a td.col-and,
+    tr.roll-b td.col-and {
+        width: 100%;
+        padding: 0;
+    }
+
+    tr.roll-a td.col-and > span,
+    tr.roll-b td.col-and > span {
+        position: static;
+        display: block;
+        padding: 0 0 var(--sd2-whitespace-xs) 0;
+        text-align: left;
+    }
+
+    #dice_count,
+    #dice_count_b,
+    #die_type,
+    #die_type_b,
+    #mod,
+    #mod_b,
+    #mode,
+    #mode_b,
+    .roll-repeat #repeat {
+        width: 100%;
+    }
+
+    .roll-repeat {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--sd2-whitespace-xs) var(--sd2-whitespace-sm);
+    }
+
+    .roll-repeat label,
+    .roll-repeat span {
+        margin-right: var(--sd2-whitespace-xs);
+    }
+
+    #sort_results {
+        margin-left: 0;
+    }
+
+    .results-info,
+    .preset-help {
+        padding-left: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .results-info .pill {
+        margin-top: var(--sd2-whitespace-xs);
+        margin-left: 0;
+        margin-right: var(--sd2-whitespace-xs);
+    }
+
+    .results-table {
+        display: block;
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .results-table thead {
+        display: none;
+    }
+
+    .results-table tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .results-table tr.results-a,
+    .results-table tr.results-b {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--sd2-whitespace-xs);
+        width: 100%;
+        margin: 0 0 var(--sd2-whitespace-sm) 0;
+        padding: var(--sd2-whitespace-sm);
+        border: 1px solid rgba(15, 23, 42, 0.14);
+        border-radius: var(--sd2-box-radius);
+        background: rgba(213, 221, 237, 0.28);
+    }
+
+    .results-table tr.results-b {
+        margin-top: calc(var(--sd2-whitespace-sm) * -1);
+        border-top: 0;
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        background: rgba(207, 216, 220, 0.26);
+    }
+
+    .results-table tr.results-a:has(+ tr.results-b) {
+        margin-bottom: 0;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    .results-table tr.results-a td,
+    .results-table tr.results-b td {
+        display: block;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        line-height: 1.2;
+    }
+
+    .results-table tr.results-a td:first-child,
+    .results-table tr.results-b td:first-child,
+    .results-table tr.results-a td:last-child,
+    .results-table tr.results-b td:last-child {
+        border: 0;
+        border-radius: 0;
+    }
+
+    .results-table td.col-num {
+        flex: 0 0 100%;
+        width: 100%;
+        color: var(--sd2-color-dark-grey);
+        font-size: var(--sd2-text-size-sm);
+        text-align: left;
+    }
+
+    .results-table tr.results-a td.col-num::before {
+        content: "Set ";
+    }
+
+    .results-table tr.results-b td.col-num {
+        display: none;
+    }
+
+    .results-table td.col-dice {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 0;
+    }
+
+    .results-table td.col-details {
+        flex: 1 1 100%;
+        width: 100%;
+        min-width: 0;
+        margin-top: var(--sd2-whitespace-xs);
+        padding-top: var(--sd2-whitespace-xs);
+        border-left: 0;
+        border-top: 1px solid rgba(15, 23, 42, 0.10);
+        overflow-wrap: anywhere;
+    }
+
+    .results-table td.col-details:empty {
+        display: none;
+    }
+
+    .results-table td.col-total,
+    .results-table td.col-final {
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 70px;
+        margin-top: var(--sd2-whitespace-xs);
+        padding-top: var(--sd2-whitespace-xs);
+        border-left: 0;
+        font-size: var(--sd2-text-size-lg);
+        text-align: left;
+    }
+
+    .results-table td.col-total::before {
+        content: "Total ";
+        color: var(--sd2-color-dark-grey);
+        font-size: var(--sd2-text-size-sm);
+        font-weight: var(--sd2-text-weight-heavy);
+        text-transform: uppercase;
+    }
+
+    .results-table tr.results-b td.col-total::before {
+        content: "Subtract ";
+    }
+
+    .results-table td.col-final:not(:empty)::before {
+        content: "Final ";
+        color: var(--sd2-color-dark-grey);
+        font-size: var(--sd2-text-size-sm);
+        font-weight: var(--sd2-text-weight-heavy);
+        text-transform: uppercase;
+    }
+
+    .die-chip {
+        min-width: 32px;
+        min-height: 32px;
+        margin: 0;
+    }
+
+    .json {
+        min-height: 180px;
+        max-width: 100%;
+        overflow: auto;
+    }
+}
+
+@media (max-width: 520px) {
+    body {
+        padding: calc(40px + var(--sd2-whitespace-xs)) var(--sd2-whitespace-xs) var(--sd2-whitespace-xs);
+    }
+
+    .site-title {
+        font-size: var(--sd2-text-size-xl);
+    }
+
+    .card {
+        padding: var(--sd2-whitespace-sm);
+    }
+
+    select,
+    input,
+    button,
+    textarea {
+        font-size: var(--sd2-text-size-md);
+    }
+
+    .floating-actions {
+        padding: var(--sd2-whitespace-xs);
+    }
+
+    .sd2-action-btn {
+        padding: 0.38rem 0.45rem;
+        font-size: var(--sd2-text-size-sm);
+    }
+
+    .results-table tr.results-a,
+    .results-table tr.results-b {
+        padding: var(--sd2-whitespace-sm);
+    }
+
+    .results-table td.col-total,
+    .results-table td.col-final {
+        flex-basis: 100%;
+    }
+}
+
+@media (max-width: 400px) {
+    .site-badges {
+        display: none;
+    }
+
+    .sd2-action-btn {
+        padding: 0.34rem 0.35rem;
+        font-size: var(--sd2-text-size-sm);
+    }
+
+    .results-table tr.results-a,
+    .results-table tr.results-b {
+        gap: 4px;
+    }
+
+    .die-chip {
+        min-width: 30px;
+        min-height: 30px;
+        padding: 2px 6px;
+    }
+}

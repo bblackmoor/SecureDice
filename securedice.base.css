@@ -1,4 +1,4 @@
-/* securedice.css */
+/* securedice.base.css */
 
 :root {
     --sd2-text-font: "Roboto", sans-serif, ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial;
@@ -7,6 +7,7 @@
     --sd2-text-size-md: 14px;
     --sd2-text-size-lg: 21px;
     --sd2-text-size-xl: 24px;
+    --sd2-text-size-xxl: 36px;
 
     --sd2-text-weight-normal: 500;
     --sd2-text-weight-semibold: 700;
@@ -33,6 +34,12 @@
     --sd2-color-special: var(--sd2-color-dark-green);
     --sd2-color-danger: var(--sd2-color-dark-red);
     --sd2-box-radius: var(--sd2-whitespace-sm);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
 }
 
 body {
@@ -68,7 +75,7 @@ body {
 
 .site-title {
     margin: var(--sd2-whitespace-sm) 0 0 0;
-    font-size: 36px;
+    font-size: var(--sd2-text-size-xxl);
     letter-spacing: -0.02em;
     line-height: 1.08;
     font-weight: var(--sd2-text-weight-heavy);
@@ -234,7 +241,7 @@ a.button:visited {
     border: none;
     border-radius: var(--sd2-box-radius);
 
-    font-size: 0.875rem;
+    font-size: var(--sd2-text-size-md);
     font-weight: var(--sd2-text-weight-heavy);
     color: var(--sd2-color-white);
     text-decoration: none;
@@ -634,25 +641,6 @@ label[for="dice_count_b"],
     gap: var(--sd2-whitespace-sm);
 
     width: 160px;
-}
-
-@media (max-width: 520px) {
-    .floating-actions {
-        top: var(--sd2-whitespace-md);
-        right: var(--sd2-whitespace-md);
-        width: 180px;
-    }
-}
-
-@media (max-width: 400px) {
-    .floating-actions {
-        position: static;
-        display: flex;
-        flex-direction: row;
-        justify-content: flex-end;
-
-        width: 100%;
-    }
 }
 
 @media print {
