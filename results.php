@@ -1,4 +1,6 @@
 <?php
+// results.php
+
 declare(strict_types=1);
 
 require_once __DIR__ . "/lib.php";
@@ -38,11 +40,11 @@ $sortResults = !empty($input["sortResults"]);
 $activeB = !empty($input["activeB"]);
 
 $modeLabels = [
-    "sum" => "Sum them all",
-    "drop_lowest" => "Drop the lowest die",
-    "drop_highest" => "Drop the highest die",
-    "wild" => "Wild die",
-    "stunt" => "Stunt die",
+    "sum" => "sum them all",
+    "drop_lowest" => "drop the lowest die",
+    "drop_highest" => "drop the highest die",
+    "wild" => "wild die",
+    "stunt" => "stunt die",
 ];
 
 $negativeChar = "-";
@@ -66,6 +68,21 @@ function format_signed_int_txt(int $v): string
     }
 
     return "+ " . (string) $parts["abs"];
+}
+
+function format_roll_summary(string $label, int $mod, string $modeLabel): string
+{
+    $out = $label;
+
+    if ($mod !== 0) {
+        $out .= " " . format_signed_int_txt($mod);
+    }
+
+    if ($modeLabel !== "") {
+        $out .= ", " . $modeLabel;
+    }
+
+    return $out;
 }
 
 function format_signed_float(float $v, int $decimals): string
@@ -434,13 +451,17 @@ $rollB = is_array($input["rollB"] ?? null)
 $labelA = (string) ($rollA["diceCount"] ?? 0) . (string) ($rollA["dieLabel"] ?? "");
 $modeALabel = $modeLabels[(string) ($rollA["mode"] ?? "")] ?? (string) ($rollA["mode"] ?? "");
 
-$labelB = (string) ($rollB["diceCount"] ?? 0) . (string) ($rollB["dieLabel"] ?? "");
+$rollBSign = ((int) ($rollB["sign"] ?? 1) < 0) ? -1 : 1;
+$rollBConnector = ($rollBSign < 0) ? "minus" : "plus";
+$rollBDiceCountAbs = (int) ($rollB["diceCountAbs"] ?? abs((int) ($rollB["diceCount"] ?? 0)));
+
+$labelB = (string) $rollBDiceCountAbs . (string) ($rollB["dieLabel"] ?? "");
 $modeBLabel = $modeLabels[(string) ($rollB["mode"] ?? "")] ?? (string) ($rollB["mode"] ?? "");
 
 $diceColumns = max(
     1,
     (int) ($rollA["diceCount"] ?? 1),
-    $activeB ? (int) ($rollB["diceCount"] ?? 0) : 0
+    $activeB ? $rollBDiceCountAbs : 0
 );
 
 $modeToDd = [
@@ -530,19 +551,13 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
 
 <div class="card">
     <div class="results-info">
-        <b><?= h((string) $repeat) ?> ×</b>
-        <?= h($labelA) ?> <span class="pill"><?= h($modeALabel) ?></span>
-        <span class="pill">Modifier <?= h((string) ($rollA["mod"] ?? 0)) ?></span>
+		<?= h((string) $repeat) ?> ×
+		<span class="pill"><?= h(format_roll_summary($labelA, (int) ($rollA["mod"] ?? 0), $modeALabel)) ?></span>
 
-        <?php if ($activeB): ?>
-            &nbsp; minus &nbsp;
-            <?= h($labelB) ?> <span class="pill"><?= h($modeBLabel) ?></span>
-            <span class="pill">Modifier <?= h((string) ($rollB["mod"] ?? 0)) ?></span>
-        <?php endif; ?>
-
-        <?php if ($sortResults): ?>
-            <span class="pill">Sorted</span>
-        <?php endif; ?>
+		<?php if ($activeB): ?>
+			&nbsp; <?= h($rollBConnector) ?> &nbsp;
+			<span class="pill"><?= h(format_roll_summary($labelB, (int) ($rollB["mod"] ?? 0), $modeBLabel)) ?></span>
+		<?php endif; ?>
     </div>
 
     <div class="results-info">
@@ -594,14 +609,15 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
                 <tr class="results-a">
                     <td class="col-num"><?= h($setLabelA) ?></td>
 
-                    <?php for ($d = 0; $d < $diceColumns; $d++): ?>
-                        <?php $it = $itemsA[$d] ?? null; ?>
-                        <td class="col-dice">
-                            <?php
-							echo render_die_chip_html($it, $emdashChar);
-                            ?>
-                        </td>
-                    <?php endfor; ?>
+					<td class="col-dice">
+						<div class="dice-chip-wrap">
+							<?php foreach ($itemsA as $it): ?>
+								<?php
+								echo render_die_chip_html($it, $emdashChar);
+								?>
+							<?php endforeach; ?>
+						</div>
+					</td>
 
                     <td class="col-details"><?= render_special_detail($rA, $sortResults, $emdashChar) ?></td>
 
@@ -624,7 +640,6 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
                         }
                         ?>
                     </td>
-                    <td class="col-final"></td>
                 </tr>
 
                 <?php if (is_array($rB)): ?>
@@ -640,29 +655,29 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
                     <tr class="results-b">
                         <td class="col-num"><?= h($setLabelB) ?></td>
 
-                        <?php for ($d = 0; $d < $diceColumns; $d++): ?>
-                            <?php $it = $itemsB[$d] ?? null; ?>
-                            <td class="col-dice">
-                                <?php
-								echo render_die_chip_html($it, $emdashChar);
-                                ?>
-                            </td>
-                        <?php endfor; ?>
+						<td class="col-dice">
+							<div class="dice-chip-wrap">
+								<?php foreach ($itemsB as $it): ?>
+									<?php
+									echo render_die_chip_html($it, $emdashChar);
+									?>
+								<?php endforeach; ?>
+							</div>
+						</td>
 
                         <td class="col-details"><?= render_special_detail($rB, $sortResults, $emdashChar) ?></td>
 
                         <td class="col-total">
                             <?php
-                            echo h($negativeChar) . " " . h(
+                            $rowBSignChar = ($rollBSign < 0) ? $negativeChar : "+";
+
+                            echo h($rowBSignChar) . " " . h(
                                 ((string) ($rB["die_kind"] ?? "normal") === "fudge")
                                     ? format_signed_int_txt($totalFinalB)
                                     : (string) $totalFinalB
                             );
-                            ?>
-                        </td>
-                        <td class="col-final">
-                            <?php
-                            echo "= <b>" . h(
+                            echo " = ";
+                            echo "<b>" . h(
                                 $isFudgeOutput
                                     ? format_signed_int_txt($final)
                                     : (string) $final
@@ -697,7 +712,7 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
     <a class="sd2-action-btn primary" href="<?= h($rollAgainUrl) ?>">Roll Again</a>
     <button class="sd2-action-btn neutral" type="button" id="copy-url" data-copy="<?= h($rollAgainAbs) ?>">Copy URL</button>
     <button class="sd2-action-btn neutral" type="button" id="copy-json">Copy JSON</button>
-    <button class="sd2-action-btn neutral" type="button" id="copy-md5" data-copy="<?= h($jsonMd5) ?>">Copy MD5 Hash</button>
+    <button class="sd2-action-btn neutral" type="button" id="copy-md5" data-copy="<?= h($jsonMd5) ?>">Copy Hash</button>
 </div>
 
 <footer class="site-footer" role="contentinfo">

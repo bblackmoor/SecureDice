@@ -1,4 +1,6 @@
 <?php
+// securedice.php
+
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
@@ -6,6 +8,13 @@ require_once __DIR__ . '/lib.php';
 function h(string $s): string
 {
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+}
+
+function signed_label(int $n): string
+{
+    $sign = ($n >= 0) ? '+' : '−';
+
+    return sprintf('%s %2d', $sign, abs($n));
 }
 
 function get_qs(string $key): ?string
@@ -45,21 +54,22 @@ function get_qi(string $key): ?int
 $allowedSides      = allowed_die_sides();
 $repeatOptions     = build_repeat_options();
 
-$diceOptions1      = range(1, 20);
-$diceOptions2      = range(0, 20);
+$diceOptions1      = range(0, 20);
+$diceOptions2      = range(1, 20);
+$diceOptions3      = range(-20, 20);
 
 $modeOptionsRow1 = [
-    'sum'           => 'Sum them all (default)',
-    'drop_lowest'   => 'Drop the lowest die',
-    'drop_highest'  => 'Drop the highest die',
-    'wild'          => 'Use one of them as a wild die',
-    'stunt'         => 'Use one of them as a stunt die',
+    'sum'           => 'sum them all (default)',
+    'drop_lowest'   => 'drop the lowest die',
+    'drop_highest'  => 'drop the highest die',
+    'wild'          => 'use one as a wild die',
+    'stunt'         => 'use one as a stunt die',
 ];
 
 $modeOptionsRow2 = [
-    'sum'           => 'Sum them all (default)',
-    'drop_lowest'   => 'Drop the lowest die',
-    'drop_highest'  => 'Drop the highest die',
+    'sum'           => 'sum them all (default)',
+    'drop_lowest'   => 'drop the lowest die',
+    'drop_highest'  => 'drop the highest die',
 ];
 
 $dieTypeOptionsRow1 = [];
@@ -96,7 +106,7 @@ $defaultSort       = false;
 
 $pref_df = get_qi('df');
 
-if (($dq = get_qi('dq')) !== null && in_array($dq, $diceOptions1, true)) {
+if (($dq = get_qi('dq')) !== null && in_array($dq, $diceOptions2, true)) {
     $defaultDiceCount1 = $dq;
 }
 
@@ -120,7 +130,7 @@ if ($pref_df !== null && $pref_df === 1) {
     $defaultDieType1 = 'd6f';
 }
 
-if (($mdq = get_qi('mdq')) !== null && in_array($mdq, $diceOptions2, true)) {
+if (($mdq = get_qi('mdq')) !== null && in_array($mdq, $diceOptions3, true)) {
     $defaultDiceCount2 = $mdq;
 }
 
@@ -193,141 +203,135 @@ $exampleUrl   = $rollPageUrl . '?' . $exampleQuery;
     </div>
 
     <div class="card">
+		<table class="dice-builder">
+			<tr id="roll-a" class="roll-a dice-row">
+				<td class="col-num">
+					<label for="dice_count">Roll</label>
+					<select id="dice_count" name="dice_count" required>
+						<?php foreach ($diceOptions2 as $d): ?>
+							<option value="<?= (int) $d ?>" <?= ((int) $defaultDiceCount1 === (int) $d) ? 'selected' : '' ?>>
+								<?= (int) $d ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</td>
 
-        <table>
+				<td class="col-dice">
+					<select id="die_type" name="die_type" required>
+						<?php foreach ($dieTypeOptionsRow1 as $val => $label): ?>
+							<option value="<?= h($val) ?>" <?= ($defaultDieType1 === $val) ? 'selected' : '' ?>>
+								<?= h($label) ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</td>
 
-            <tr id="roll-a" class="roll-a">
+				<td class="col-mod">
+					<select id="mod" name="mod">
+						<?php foreach ($diceOptions3 as $d): ?>
+							<option value="<?= (int) $d ?>" <?= ((int) $defaultMod1 === (int) $d) ? 'selected' : '' ?>>
+								<?= signed_label((int) $d) ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</td>
 
-                <td class="col-num">
-                    <label for="dice_count">Roll</label>
-                    <select id="dice_count" name="dice_count" required>
-                        <?php foreach ($diceOptions1 as $d): ?>
-                            <option value="<?= (int) $d ?>" <?= ((int) $defaultDiceCount1 === (int) $d) ? 'selected' : '' ?>>
-                                <?= (int) $d ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </td>
+				<td class="col-and">
+					<span>and</span>
+				</td>
 
-                <td class="col-dice">
-                    <label for="die_type">Die type</label>
-                    <select id="die_type" name="die_type" required>
-                        <?php foreach ($dieTypeOptionsRow1 as $val => $label): ?>
-                            <option value="<?= h($val) ?>" <?= ($defaultDieType1 === $val) ? 'selected' : '' ?>>
-                                <?= h($label) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </td>
+				<td class="col-mode">
+					<select id="mode" name="mode" required>
+						<?php foreach ($modeOptionsRow1 as $k => $label): ?>
+							<option value="<?= h($k) ?>" <?= ($defaultMode1 === $k) ? 'selected' : '' ?>>
+								<?= h($label) ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</td>
 
-                <td class="field mod-field col-mod">
-                    <label for="mod">Modifier (+/-)</label>
-                    <input
-                        id="mod"
-                        name="mod"
-                        type="text"
-                        inputmode="numeric"
-                        value="<?= h((string) $defaultMod1) ?>"
-                        required
-                    >
-                </td>
+			</tr>
 
-                <td class="col-and"><span>and</span></td>
+			<tr id="roll-b" class="roll-b dice-row">
 
-                <td class="field mode col-mode">
-                    <label for="mode">Mode</label>
-                    <select id="mode" name="mode" required>
-                        <?php foreach ($modeOptionsRow1 as $k => $label): ?>
-                            <option value="<?= h($k) ?>" <?= ($defaultMode1 === $k) ? 'selected' : '' ?>>
-                                <?= h($label) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </td>
+				<td class="col-num">
+					<label for="dice_count_b">(+/-)</label>
+					<select id="dice_count_b" name="dice_count_b">
+						<?php foreach ($diceOptions3 as $d): ?>
+							<option value="<?= (int) $d ?>" <?= ((int) $defaultDiceCount2 === (int) $d) ? 'selected' : '' ?>>
+								<?= signed_label((int) $d) ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</td>
 
-            </tr>
+				<td class="col-dice">
+					<select id="die_type_b" name="die_type_b">
+						<?php foreach ($dieTypeOptionsRow2 as $val => $label): ?>
+							<option value="<?= h($val) ?>" <?= ($defaultDieType2 === $val) ? 'selected' : '' ?>>
+								<?= h($label) ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</td>
 
-            <tr id="roll-b" class="roll-b">
+				<td class="col-mod">
+					<select id="mod_b" name="mod_b">
+						<?php foreach ($diceOptions3 as $d): ?>
+							<option value="<?= (int) $d ?>" <?= ((int) $defaultMod2 === (int) $d) ? 'selected' : '' ?>>
+								<?= signed_label((int) $d) ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</td>
 
-                <td class="col-num">
-                    <label for="dice_count_b">Then subtract</label>
-                    <select id="dice_count_b" name="dice_count_b">
-                        <?php foreach ($diceOptions2 as $d): ?>
-                            <option value="<?= (int) $d ?>" <?= ((int) $defaultDiceCount2 === (int) $d) ? 'selected' : '' ?>>
-                                <?= (int) $d ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </td>
+				<td class="col-and">
+					<span>and</span>
+				</td>
 
-                <td class="col-dice">
-                    <label for="die_type_b">Die type</label>
-                    <select id="die_type_b" name="die_type_b">
-                        <?php foreach ($dieTypeOptionsRow2 as $val => $label): ?>
-                            <option value="<?= h($val) ?>" <?= ($defaultDieType2 === $val) ? 'selected' : '' ?>>
-                                <?= h($label) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </td>
+				<td class="col-mode">
+					<select id="mode_b" name="mode_b">
+						<?php foreach ($modeOptionsRow2 as $k => $label): ?>
+							<option value="<?= h($k) ?>" <?= ($defaultMode2 === $k) ? 'selected' : '' ?>>
+								<?= h($label) ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</td>
 
-                <td class="field mod-field col-mod">
-                    <label for="mod_b">Modifier (+/-)</label>
-                    <input
-                        id="mod_b"
-                        name="mod_b"
-                        type="text"
-                        inputmode="numeric"
-                        value="<?= h((string) $defaultMod2) ?>"
-                    >
-                </td>
+			</tr>
 
-                <td class="col-and"><span>and</span></td>
+			<tr class="roll-repeat">
 
-                <td class="field mode col-mode">
-                    <label for="mode_b">Mode</label>
-                    <select id="mode_b" name="mode_b">
-                        <?php foreach ($modeOptionsRow2 as $k => $label): ?>
-                            <option value="<?= h($k) ?>" <?= ($defaultMode2 === $k) ? 'selected' : '' ?>>
-                                <?= h($label) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </td>
+				<td colspan="5">
+					<div class="roll-repeat-controls">
+						<span>Roll this set of dice</span>
 
-            </tr>
+						<select id="repeat" name="repeat" required>
+							<?php foreach ($repeatOptions as $r): ?>
+								<option value="<?= (int) $r ?>" <?= ((int) $defaultRepeat === (int) $r) ? 'selected' : '' ?>>
+									<?= (int) $r ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
 
-            <tr class="roll-repeat">
+						<span>times.</span>
 
-                <td colspan="5">
-                    <span>Roll this set of dice</span>
+						<input
+							id="sort_results"
+							name="sort_results"
+							type="checkbox"
+							value="1"
+							<?= $defaultSort ? 'checked' : '' ?>
+						>
 
-                    <select id="repeat" name="repeat" required>
-                        <?php foreach ($repeatOptions as $r): ?>
-                            <option value="<?= (int) $r ?>" <?= ((int) $defaultRepeat === (int) $r) ? 'selected' : '' ?>>
-                                <?= (int) $r ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+						<label for="sort_results">Sort dice sets?</label>
+					</div>
+				</td>
 
-                    <span>times.</span>
+			</tr>
 
-                    <input
-                        id="sort_results"
-                        name="sort_results"
-                        type="checkbox"
-                        value="1"
-                        <?= $defaultSort ? 'checked' : '' ?>
-                    >
-
-                    <label for="sort_results">Sort dice sets?</label>
-
-                </td>
-
-            </tr>
-
-        </table>
-
+		</table>
     </div>
 
     <div class="card">
@@ -358,7 +362,7 @@ $exampleUrl   = $rollPageUrl . '?' . $exampleQuery;
 
                 <tr>
                     <td><code>dm=</code></td>
-                    <td>(row 1 modifier): -60 to 60</td>
+                    <td>(row 1 modifier): -20 to 20</td>
                     <td><i>Example:</i> <code class="preset-example">dm=+3</code></td>
                 </tr>
 
@@ -376,8 +380,8 @@ $exampleUrl   = $rollPageUrl . '?' . $exampleQuery;
 
                 <tr>
                     <td><code>mdq=</code></td>
-                    <td>(row 2 dice): 0 to 20</td>
-                    <td><i>Example:</i> <code class="preset-example">mdq=2</code></td>
+                    <td>(row 2 dice): -20 to 20; positive adds, negative subtracts</td>
+                    <td><i>Example:</i> <code class="preset-example">mdq=-2</code></td>
                 </tr>
 
                 <tr>

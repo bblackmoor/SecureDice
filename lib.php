@@ -1,4 +1,6 @@
 <?php
+// lib.php
+
 declare(strict_types=1);
 
 /**
@@ -44,48 +46,51 @@ function safe_bool($v): bool
 }
 
 /**
- * Build an absolute URL to a path in this app (e.g. "securedice.php").
- * Tries to respect reverse proxies via X-Forwarded-* headers when present.
+ * Build an absolute shareable URL to a path in this app
+ * (for example, "securedice.php").
+ *
+ * Uses the current request host so generated links can be copied
+ * and shared with other players.
+ *
+ * Intentionally does NOT trust X-Forwarded-Host, since that header
+ * is commonly client-controlled unless a reverse proxy is explicitly
+ * trusted and configured for it.
+ *
+ * If the detected host is wrong because of a proxy or unusual server
+ * setup, the shared link may fail—which is acceptable for this use case.
  */
 function build_absolute_url(string $path): string
 {
     $path = ltrim($path, '/');
 
-    $https = false;
-    $xfProto = $_SERVER["HTTP_X_FORWARDED_PROTO"] ?? "";
-
-    if (is_string($xfProto) && strtolower(trim(explode(",", $xfProto)[0])) === "https") {
-        $https = true;
-    } elseif (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off") {
-        $https = true;
-    } elseif (isset($_SERVER["SERVER_PORT"]) && (string) $_SERVER["SERVER_PORT"] === "443") {
-        $https = true;
-    }
+    $https =
+        (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off")
+        || ((string) ($_SERVER["SERVER_PORT"] ?? "") === "443");
 
     $scheme = $https ? "https" : "http";
 
-    $host = "";
-    $xfHost = $_SERVER["HTTP_X_FORWARDED_HOST"] ?? "";
+    $host = (string) ($_SERVER["HTTP_HOST"] ?? "localhost");
+    $host = trim($host);
 
-    if (is_string($xfHost) && trim($xfHost) !== "") {
-        $host = trim(explode(",", $xfHost)[0]);
-    } elseif (!empty($_SERVER["HTTP_HOST"])) {
-        $host = (string) $_SERVER["HTTP_HOST"];
-    } elseif (!empty($_SERVER["SERVER_NAME"])) {
-        $host = (string) $_SERVER["SERVER_NAME"];
-    } else {
+    if (!preg_match('/^[a-z0-9.-]+(?::[0-9]{1,5})?$/i', $host)) {
         $host = "localhost";
     }
 
-    // Base directory of the current script (e.g. "/secure-dice/")
     $scriptName = (string) ($_SERVER["SCRIPT_NAME"] ?? "/");
-    $baseDir = rtrim(str_replace("\\", "/", dirname($scriptName)), "/");
+    $baseDir = rtrim(
+        str_replace("\\", "/", dirname($scriptName)),
+        "/"
+    );
 
-    if ($baseDir === "") {
+    if ($baseDir === "." || $baseDir === "/") {
         $baseDir = "";
     }
 
-    return $scheme . "://" . $host . ($baseDir ? $baseDir . "/" : "/") . $path;
+    return $scheme
+        . "://"
+        . $host
+        . ($baseDir !== "" ? $baseDir . "/" : "/")
+        . $path;
 }
 
 /**

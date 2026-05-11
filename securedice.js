@@ -1,3 +1,5 @@
+// securedice.js
+
 (function () {
     "use strict";
 
@@ -70,6 +72,40 @@
         }
 
         return "none";
+    }
+
+    function isDropMode(modeValue) {
+        return (modeValue === "drop_lowest" || modeValue === "drop_highest");
+    }
+
+    function setDropModeOptionsEnabled(modeEl, enabled) {
+        if (!modeEl) {
+            return;
+        }
+
+        Array.prototype.forEach.call(modeEl.options, function (option) {
+            if (isDropMode(String(option.value || ""))) {
+                option.disabled = !enabled;
+            }
+        });
+
+        if (!enabled && isDropMode(String(modeEl.value || ""))) {
+            modeEl.value = "sum";
+        }
+    }
+
+    function getAbsIntValue(el) {
+        if (!el) {
+            return 0;
+        }
+
+        const n = parseInt(String(el.value || ""), 10);
+
+        if (!Number.isFinite(n)) {
+            return 0;
+        }
+
+        return Math.abs(n);
     }
 
     function getInputValue(idA, idB) {
@@ -280,6 +316,9 @@
             modeB.disabled = hideRowB;
         }
 
+        setDropModeOptionsEnabled(modeA, getAbsIntValue(diceCountA) >= 2);
+        setDropModeOptionsEnabled(modeB, getAbsIntValue(diceCountB) >= 2);
+
         if (hideRowB) {
             setRowBDefaults(diceCountB, dieTypeB, modeB, modB);
         }
@@ -288,6 +327,7 @@
     function wireDiceUi() {
         const dieTypeA = qsId("die_type");
         const modeA = qsId("mode");
+        const modeB = qsId("mode_b");
         const diceCountA = qsId("dice_count");
         const diceCountB = qsId("dice_count_b");
 
@@ -305,6 +345,10 @@
 
         if (diceCountB) {
             diceCountB.addEventListener("change", applyUI);
+        }
+
+        if (modeB) {
+            modeB.addEventListener("change", applyUI);
         }
 
         applyUI();
@@ -354,10 +398,32 @@
         }
     }
 
+    function validateFormBeforeSubmit(event) {
+        const diceCountA = qsId("dice_count");
+        const modeA = qsId("mode");
+        const diceCountB = qsId("dice_count_b");
+        const modeB = qsId("mode_b");
+
+        if (modeA && isDropMode(String(modeA.value || "")) && getAbsIntValue(diceCountA) < 2) {
+            event.preventDefault();
+            alert("First roll: Drop modes require at least 2 dice.");
+            return;
+        }
+
+        if (modeB && !modeB.disabled && isDropMode(String(modeB.value || "")) && getAbsIntValue(diceCountB) < 2) {
+            event.preventDefault();
+            alert("Second roll: Drop modes require at least 2 dice.");
+        }
+    }
+
     function wireFloatingActions() {
         const form = qsId("sd2-form");
         const copyBtn = qsId("sd2-copy-url");
         const resetBtn = qsId("sd2-reset");
+
+        if (form) {
+            form.addEventListener("submit", validateFormBeforeSubmit);
+        }
 
         if (copyBtn) {
             copyBtn.addEventListener("click", function () {

@@ -1,4 +1,6 @@
 <?php
+// roll.php
+
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
@@ -11,7 +13,7 @@ function h(string $s): string
 $useGetPresets = empty($_POST);
 
 $allowedDiceCountsRow1 = range(1, 20);
-$allowedDiceCountsRow2 = range(0, 20);
+$allowedDiceCountsRow2 = range(-20, 20);
 $allowedRepeats = build_repeat_options();
 $allowedSides = allowed_die_sides();
 
@@ -228,6 +230,9 @@ try {
         $diceCountB = 0;
     }
 
+    $diceCountBSign = ($diceCountB < 0) ? -1 : 1;
+    $diceCountBRoll = abs($diceCountB);
+
     $modB = clamp_int($modB, -60, 60);
 
     if (!in_array($modeB, $allowedModesRow2, true)) {
@@ -243,10 +248,12 @@ try {
 
     if ($row1ForcesRow2Off) {
         $diceCountB = 0;
+        $diceCountBSign = 1;
+        $diceCountBRoll = 0;
     }
 
     // Row2 restrictions
-    if ($diceCountB > 0) {
+    if ($diceCountBRoll > 0) {
         if ($dieTypeRawB === 'd6f') {
             throw new RuntimeException('Second roll: FUDGE is not allowed.');
         }
@@ -261,12 +268,12 @@ try {
             $modeB,
             (string) $dt2['kind'],
             (int) $dt2['sides'],
-            $diceCountB,
+            $diceCountBRoll,
             'Second roll'
         );
     }
 
-    $activeB = ($diceCountB > 0);
+    $activeB = ($diceCountBRoll > 0);
 
     // Trials
     $trials = [];
@@ -278,10 +285,10 @@ try {
         $r2 = null;
 
         if ($activeB) {
-            $r2 = do_one_roll($diceCountB, $dieTypeRawB, $modeB, $modB);
+            $r2 = do_one_roll($diceCountBRoll, $dieTypeRawB, $modeB, $modB);
         }
 
-        $final = $r1['total_final'] - ($r2 ? $r2['total_final'] : 0);
+        $final = $r1['total_final'] + ($r2 ? ($diceCountBSign * $r2['total_final']) : 0);
 
         $trials[] = [
             'rollA' => $r1,
@@ -316,6 +323,8 @@ try {
             ],
             'rollB' => [
                 'diceCount' => $diceCountB,
+                'diceCountAbs' => $diceCountBRoll,
+                'sign' => $diceCountBSign,
                 'dieTypeRaw' => $dieTypeRawB,
                 'dieKind' => $dieB['kind'],
                 'sides' => (int) $dieB['sides'],
