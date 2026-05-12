@@ -145,14 +145,10 @@ body {
 .card {
     margin: var(--sd2-whitespace-md) 0;
     padding: var(--sd2-whitespace-md);
-
     border: 1px solid var(--sd2-color-dark-grey);
     border-radius: var(--sd2-box-radius);
-
     background: var(--sd2-color-white);
-
     color: var(--sd2-color-black);
-
     box-shadow:
         0 1px 0 rgba(15, 23, 42, 0.02),
         0 var(--sd2-whitespace-sm) var(--sd2-whitespace-lg) var(--sd2-color-dark-grey);
@@ -180,8 +176,9 @@ select,
 input,
 textarea {
     width: 100%;
-    margin: var(--sd2-whitespace-sm) 0;
-    border: 2px solid var(--sd2-color-dark-grey);
+    margin: var(--sd2-whitespace-xs);
+    padding: var(--sd2-whitespace-sm);
+    border: 2px solid rgba(15, 23, 42, 0.28);
     border-radius: var(--sd2-box-radius);
     background: rgba(255, 255, 255, 0.92);
     font-family: var(--sd2-text-font);
@@ -536,17 +533,13 @@ label[for="dice_count_b"],
     display: inline-flex;
     align-items: center;
     justify-content: center;
-
     min-width: 30px;
     min-height: 30px;
     margin: 0;
     padding: 2px 7px;
-
     border: 2px solid rgba(15, 23, 42, 0.28);
     border-radius: 8px;
-
     background: var(--sd2-color-white);
-
     font-size: var(--sd2-text-size-md);
     font-weight: var(--sd2-text-weight-heavy);
     color: var(--sd2-color-black);

@@ -92,37 +92,26 @@
         border-collapse: separate;
     }
 
-    .dice-builder {
-        width: 100%;
+    form > .card > table.dice-builder {
+        display: table;
+        width: auto;
+        max-width: 100%;
         border-spacing: 0 var(--sd2-whitespace-sm);
     }
 
-    .dice-row,
-    .dice-row td {
-        display: block;
-        width: 100%;
+    form > .card > table.dice-builder > tbody {
+        display: table-row-group;
+        width: auto;
     }
 
-    .dice-row .col-and {
-        padding: 0;
+    form > .card > table.dice-builder > tbody > tr {
+        display: table-row;
+        width: auto;
     }
 
-    .dice-row .col-and span {
-        display: block;
-        padding: 0 0 var(--sd2-whitespace-xs) 0;
-        text-align: left;
-    }
-
-    #dice_count,
-    #dice_count_b,
-    #die_type,
-    #die_type_b,
-    #mod,
-    #mod_b,
-    #mode,
-    #mode_b,
-    .roll-repeat #repeat {
-        width: 100%;
+    form > .card > table.dice-builder > tbody > tr > td {
+        display: table-cell;
+        width: auto;
     }
 
     .roll-repeat-controls {
