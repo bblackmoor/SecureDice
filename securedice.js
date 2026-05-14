@@ -139,71 +139,71 @@
     }
 
     function buildPresetUrl() {
-        const dq = getSelectValue("dice_count");
+        const aq = getSelectValue("dice_count");
         const dieA = getSelectValue("die_type");
-        const dm = getInputValue("mod").trim();
-        const dd = mapModeToPreset(getSelectValue("mode"));
+        const am = getInputValue("mod").trim();
+        const ad = mapModeToPreset(getSelectValue("mode"));
 
-        const mdq = getSelectValue("dice_count_b");
+        const bq = getSelectValue("dice_count_b");
         const dieB = getSelectValue("die_type_b");
-        const mdm = getInputValue("mod_b");
-        const mdd = mapModeToPreset(getSelectValue("mode_b"));
+        const bm = getInputValue("mod_b");
+        const bd = mapModeToPreset(getSelectValue("mode_b"));
 
         const dt = getSelectValue("repeat");
         const sdt = getChecked("sort_results") ? "1" : "";
 
-        let ds = "";
-        let df = "";
+        let as = "";
+        let af = "";
 
         if (dieA === "d6f") {
-            ds = "6";
-            df = "1";
+            as = "6";
+            af = "1";
         } else if (/^d\d+$/.test(dieA)) {
-            ds = dieA.replace(/^d/, "");
+            as = dieA.replace(/^d/, "");
         }
 
-        let mds = "";
+        let bs = "";
 
         if (/^d\d+$/.test(dieB)) {
-            mds = dieB.replace(/^d/, "");
+            bs = dieB.replace(/^d/, "");
         }
 
         const params = new URLSearchParams();
 
-        if (dq !== "") {
-            params.set("dq", dq);
+        if (aq !== "") {
+            params.set("aq", aq);
         }
 
-        if (ds !== "") {
-            params.set("ds", ds);
+        if (as !== "") {
+            params.set("as", as);
         }
 
-        if (dm !== "") {
-            params.set("dm", dm);
+        if (am !== "") {
+            params.set("am", am);
         }
 
-        if (dd !== "") {
-            params.set("dd", dd);
+        if (ad !== "") {
+            params.set("ad", ad);
         }
 
-        if (df !== "") {
-            params.set("df", df);
+        if (af !== "") {
+            params.set("af", af);
         }
 
-        if (mdq !== "") {
-            params.set("mdq", mdq);
+        if (bq !== "") {
+            params.set("bq", bq);
         }
 
-        if (mds !== "") {
-            params.set("mds", mds);
+        if (bs !== "") {
+            params.set("bs", bs);
         }
 
-        if (mdm !== "") {
-            params.set("mdm", mdm);
+        if (bm !== "") {
+            params.set("bm", bm);
         }
 
-        if (mdd !== "") {
-            params.set("mdd", mdd);
+        if (bd !== "") {
+            params.set("bd", bd);
         }
 
         if (dt !== "") {

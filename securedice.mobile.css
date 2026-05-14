@@ -96,7 +96,7 @@
         display: table;
         width: auto;
         max-width: 100%;
-        border-spacing: 0 var(--sd2-whitespace-sm);
+        border-spacing: 0 var(--sd2-whitespace-xs);
     }
 
     form > .card > table.dice-builder > tbody {
@@ -136,127 +136,6 @@
         margin-top: var(--sd2-whitespace-xs);
         margin-left: 0;
         margin-right: var(--sd2-whitespace-xs);
-    }
-
-    .results-table {
-        display: block;
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-    }
-
-    .results-table thead {
-        display: none;
-    }
-
-    .results-table tbody {
-        display: block;
-        width: 100%;
-    }
-
-    .results-table th {
-        text-align: left; 
-    }
-
-    .results-table tr.results-a,
-    .results-table tr.results-b {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
-        text-align: left;
-        gap: var(--sd2-whitespace-xs);
-        width: 100%;
-        margin: 0 0 var(--sd2-whitespace-sm) 0;
-        padding: var(--sd2-whitespace-sm);
-        border: 1px solid rgba(15, 23, 42, 0.14);
-        border-radius: var(--sd2-box-radius);
-        background: rgba(213, 221, 237, 0.28);
-    }
-
-    .results-table tr.results-b {
-        margin-top: calc(var(--sd2-whitespace-sm) * -1);
-        border-top: 0;
-        border-top-left-radius: 0;
-        border-top-right-radius: 0;
-        background: rgba(207, 216, 220, 0.26);
-    }
-
-    .results-table tr.results-a:has(+ tr.results-b) {
-        margin-bottom: 0;
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
-    }
-
-    .results-table tr.results-a td,
-    .results-table tr.results-b td {
-        display: block;
-        padding: 0;
-        border: 0;
-        background: transparent;
-        line-height: 1.2;
-        text-align: left; 
-    }
-
-    .results-table tr.results-a td:first-child,
-    .results-table tr.results-b td:first-child,
-    .results-table tr.results-a td:last-child,
-    .results-table tr.results-b td:last-child {
-        border: 0;
-        border-radius: 0;
-    }
-
-    .results-table td.col-num {
-        flex: 0 0 100%;
-        width: 100%;
-        color: var(--sd2-color-dark-grey);
-        font-size: var(--sd2-text-size-sm);
-        text-align: left;
-    }
-
-    .results-table tr.results-a td.col-num::before {
-        content: "Set ";
-    }
-
-    .results-table tr.results-b td.col-num {
-        display: none;
-    }
-
-    .results-table td.col-dice {
-        flex: 0 0 auto;
-        width: auto;
-        min-width: 0;
-    }
-
-    .results-table td.col-details {
-        flex: 1 1 100%;
-        width: 100%;
-        min-width: 0;
-        margin-top: var(--sd2-whitespace-xs);
-        padding-top: var(--sd2-whitespace-xs);
-        border-left: 0;
-        border-top: 1px solid rgba(15, 23, 42, 0.10);
-        overflow-wrap: anywhere;
-    }
-
-    .results-table td.col-details:empty {
-        display: none;
-    }
-
-    .results-table td.col-total {
-        flex: 1 1 auto;
-        width: auto;
-        min-width: 70px;
-        margin-top: var(--sd2-whitespace-xs);
-        padding-top: var(--sd2-whitespace-xs);
-        border-left: 0;
-        font-size: var(--sd2-text-size-lg);
-        text-align: left;
-    }
-
-    .die-chip {
-        min-width: 32px;
-        min-height: 32px;
-        margin: 0;
     }
 
     .json {

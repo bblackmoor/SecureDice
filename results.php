@@ -9,8 +9,7 @@ session_start();
 
 $data = $_SESSION["last_roll"] ?? null;
 
-function h(string $s): string
-{
+function h(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES, "UTF-8");
 }
 
@@ -39,6 +38,30 @@ $repeat = (int) ($input["repeat"] ?? 1);
 $sortResults = !empty($input["sortResults"]);
 $activeB = !empty($input["activeB"]);
 
+$displayTrials = [];
+
+foreach ($trials as $originalIndex => $trial) {
+    if (!is_array($trial)) {
+        continue;
+    }
+
+    $trial["_originalIndex"] = $originalIndex;
+    $displayTrials[] = $trial;
+}
+
+if ($sortResults) {
+    usort($displayTrials, function (array $a, array $b): int {
+        $finalA = (int) ($a["final"] ?? 0);
+        $finalB = (int) ($b["final"] ?? 0);
+
+        if ($finalA !== $finalB) {
+            return $finalB <=> $finalA;
+        }
+
+        return ((int) ($a["_originalIndex"] ?? 0)) <=> ((int) ($b["_originalIndex"] ?? 0));
+    });
+}
+
 $modeLabels = [
     "sum" => "sum them all",
     "drop_lowest" => "drop the lowest die",
@@ -50,8 +73,7 @@ $modeLabels = [
 $negativeChar = "-";
 $emdashChar = "—";
 
-function split_signed_int(int $v): array
-{
+function split_signed_int(int $v): array {
     return [
         "is_negative" => ($v < 0),
         "abs" => abs($v),
@@ -59,8 +81,7 @@ function split_signed_int(int $v): array
     ];
 }
 
-function format_signed_int_txt(int $v): string
-{
+function format_signed_int_txt(int $v): string {
     $parts = split_signed_int($v);
 
     if ($parts["is_negative"]) {
@@ -70,8 +91,7 @@ function format_signed_int_txt(int $v): string
     return "+ " . (string) $parts["abs"];
 }
 
-function format_roll_summary(string $label, int $mod, string $modeLabel): string
-{
+function format_roll_summary(string $label, int $mod, string $modeLabel): string {
     $out = $label;
 
     if ($mod !== 0) {
@@ -85,8 +105,7 @@ function format_roll_summary(string $label, int $mod, string $modeLabel): string
     return $out;
 }
 
-function format_signed_float(float $v, int $decimals): string
-{
+function format_signed_float(float $v, int $decimals): string {
     $txt = number_format($v, $decimals);
 
     if ($v >= 0) {
@@ -96,8 +115,7 @@ function format_signed_float(float $v, int $decimals): string
     return $txt;
 }
 
-function make_token(string $text, array $classes = [], ?string $tag = null): array
-{
+function make_token(string $text, array $classes = [], ?string $tag = null): array {
     return [
         "text" => $text,
         "classes" => $classes,
@@ -105,8 +123,7 @@ function make_token(string $text, array $classes = [], ?string $tag = null): arr
     ];
 }
 
-function render_tokens_html(array $tokens): string
-{
+function render_tokens_html(array $tokens): string {
     $out = "";
 
     foreach ($tokens as $t) {
@@ -140,8 +157,7 @@ function render_tokens_html(array $tokens): string
     return $out;
 }
 
-function dice_item_classlist(array $item, bool $includeSpecial): array
-{
+function dice_item_classlist(array $item, bool $includeSpecial): array {
     $classes = [];
 
     if (!empty($item["is_dropped"])) {
@@ -161,8 +177,7 @@ function dice_item_classlist(array $item, bool $includeSpecial): array
     return $classes;
 }
 
-function sort_dice_items(array $items): array
-{
+function sort_dice_items(array $items): array {
     $items = array_values($items);
 
     usort($items, function (array $a, array $b): int {
@@ -182,8 +197,7 @@ function sort_dice_items(array $items): array
     return $items;
 }
 
-function format_dice_tokens(array $items, bool $sorted, string $context): array
-{
+function format_dice_tokens(array $items, bool $sorted, string $context): array {
     $items = $sorted ? sort_dice_items($items) : array_values($items);
 
     $tokens = [];
@@ -221,10 +235,7 @@ function format_dice_tokens(array $items, bool $sorted, string $context): array
         if ($context === "cell" && $isFudge) {
             $parts = split_signed_int($v);
 
-            $signClasses = $classes;
-            $signClasses[] = "no-special";
-
-            $tokens[] = make_token($parts["sign"], $signClasses, "span");
+            $tokens[] = make_token($parts["sign"], $classes, "span");
             $tokens[] = make_token(" ");
 
             $valueTag = (!empty($it["is_dropped"]) || in_array("die-special", $classes, true))
@@ -248,15 +259,13 @@ function format_dice_tokens(array $items, bool $sorted, string $context): array
     return $tokens;
 }
 
-function format_dice_html(array $items, bool $sorted, string $context): string
-{
+function format_dice_html(array $items, bool $sorted, string $context): string {
     $tokens = format_dice_tokens($items, $sorted, $context);
 
     return render_tokens_html($tokens);
 }
 
-function render_die_chip_html(?array $item, string $emdashChar): string
-{
+function render_die_chip_html(?array $item, string $emdashChar): string {
     if (!is_array($item)) {
         return "<span class=\"die-chip is-empty\">" . h($emdashChar) . "</span>";
     }
@@ -285,8 +294,7 @@ function render_die_chip_html(?array $item, string $emdashChar): string
     return "<span class=\"" . h(implode(" ", $classes)) . "\">" . h($text) . "</span>";
 }
 
-function render_modifier_html(int $mod): string
-{
+function render_modifier_html(int $mod): string {
     if ($mod === 0) {
         return "";
     }
@@ -300,12 +308,10 @@ function render_modifier_html(int $mod): string
     $sign = h($parts["sign"]);
     $abs = h((string) $parts["abs"]);
 
-    return " <span class=\"no-special\">" . $sign . "</span>"
-        . " <span class=\"" . h($spanClass) . "\">" . $abs . "</span>";
+    return " <span class=\"" . h($spanClass) . "\">" . $sign . " " . $abs . "</span>";
 }
 
-function build_dice_items(array $r): array
-{
+function build_dice_items(array $r): array {
     $rolls = is_array($r["rolls"] ?? null) ? $r["rolls"] : [];
     $kind = (string) ($r["die_kind"] ?? "normal");
 
@@ -343,57 +349,64 @@ function build_dice_items(array $r): array
     return $items;
 }
 
-function render_special_detail(array $r, bool $sortResults, string $emdashChar): string
-{
+function get_wild_die_value(array $r, array $special): int {
+    $rolls = is_array($r["rolls"] ?? null)
+        ? $r["rolls"]
+        : [];
+
+    $wildIndex = (int) ($special["index"] ?? -1);
+
+    if ($wildIndex >= 0 && array_key_exists($wildIndex, $rolls)) {
+        return (int) $rolls[$wildIndex];
+    }
+
+    $seq = is_array($special["wild_seq"] ?? null)
+        ? array_values($special["wild_seq"])
+        : [];
+
+    if ($seq) {
+        return (int) $seq[0];
+    }
+
+    return 0;
+}
+
+function render_special_detail(array $r, bool $sortResults): string {
     $special = is_array($r["special"] ?? null) ? $r["special"] : null;
     $kind = (string) ($r["die_kind"] ?? "normal");
     $mode = (string) ($r["mode"] ?? "sum");
     $mod = (int) ($r["mod"] ?? 0);
 
     if ($kind === "fudge") {
-        $items = build_dice_items($r);
+        if ($mod === 0) {
+            $baseTotal = (int) ($r["total_final"] ?? 0);
+            return h((string) $baseTotal);
+        }
 
-        $diceHtml = $items
-            ? format_dice_html($items, $sortResults, "details_fudge")
-            : "<span class=\"muted\">" . h($emdashChar) . "</span>";
-
-        return $diceHtml . render_modifier_html($mod);
+        $baseTotal = (int) ($r["total_final"] ?? 0) - $mod;
+        return h((string) $baseTotal) . render_modifier_html($mod);
     }
 
     if ($special && (string) ($special["kind"] ?? "") === "wild") {
-        $seq = is_array($special["wild_seq"] ?? null) ? $special["wild_seq"] : [];
-
         if (!empty($special["complication"])) {
             $removed = $special["removed_highest"] ?? null;
-            $removedTxt = ($removed === null)
-                ? "<span class=\"muted\">" . h($emdashChar) . "</span>"
-                : "<b>" . h((string) $removed) . "</b>";
+            $removedValue = ($removed === null)
+                ? 0
+                : (int) $removed;
 
             return "Wild first roll: "
-                . "<span class=\"die-special\">" . h("1") . "</span>"
-                . " (complication)<br>Removed highest die: "
-                . $removedTxt;
+                . "<span class=\"die-special\">1</span>"
+                . " (complication)<br>"
+                . "Removed highest die: "
+                . "<b>" . h((string) $removedValue) . "</b>";
         }
 
-        $items = [];
-
-        foreach ($seq as $i => $v) {
-            $items[] = [
-                "value" => (int) $v,
-                "orig_index" => (int) $i,
-                "is_dropped" => false,
-                "is_fudge" => false,
-                "is_stunt" => false,
-                "is_wild_initial" => ($i === 0),
-                "is_wild_consequence" => ($i > 0),
-            ];
-        }
-
-        $sum = array_sum(array_map("intval", $seq));
+        $wildValue = get_wild_die_value($r, $special);
 
         return "Wild die: "
-            . format_dice_html($items, false, "details_sum")
-            . " = <b>" . h((string) $sum) . "</b>";
+            . "<span class=\"die-special\">"
+            . h((string) $wildValue)
+            . "</span>";
     }
 
     if ($special && (string) ($special["kind"] ?? "") === "stunt") {
@@ -403,40 +416,18 @@ function render_special_detail(array $r, bool $sortResults, string $emdashChar):
     }
 
     if ($mode === "sum" || $mode === "drop_lowest" || $mode === "drop_highest") {
-        $items = build_dice_items($r);
-        $kept = [];
-
-        foreach ($items as $it) {
-            if (!empty($it["is_dropped"])) {
-                continue;
-            }
-
-            $kept[] = $it;
-        }
-
-        if ($mode === "sum" && $mod === 0) {
-            return "";
-        }
-
-        if (!$kept) {
-            $diceHtml = "<span class=\"muted\">" . h($emdashChar) . "</span>";
-
-            if ($mod === 0) {
-                return $diceHtml;
-            }
-
-            return "<b>" . $diceHtml . "</b>" . render_modifier_html($mod);
-        }
-
         if ($mod === 0) {
-            return format_dice_html($kept, $sortResults, "details_sum");
+            $baseTotal = (int) ($r["total_final"] ?? 0);
+            return h((string) $baseTotal);
         }
 
-        return format_dice_html($kept, $sortResults, "details_sum") . render_modifier_html($mod);
+        $baseTotal = (int) ($r["total_final"] ?? 0) - $mod;
+        return h((string) $baseTotal) . render_modifier_html($mod);
     }
 
-    return "<span class=\"muted\">" . h($emdashChar) . "</span>";
+    return "";
 }
+
 
 $showLimit = 200;
 
@@ -464,7 +455,7 @@ $diceColumns = max(
     $activeB ? $rollBDiceCountAbs : 0
 );
 
-$modeToDd = [
+$modeToAd = [
     "sum" => "none",
     "drop_lowest" => "lowest",
     "drop_highest" => "highest",
@@ -474,22 +465,22 @@ $modeToDd = [
 
 $qs = [];
 
-$qs["dq"] = (int) ($rollA["diceCount"] ?? 3);
-$qs["dm"] = (int) ($rollA["mod"] ?? 0);
-$qs["dd"] = $modeToDd[(string) ($rollA["mode"] ?? "sum")] ?? "none";
+$qs["aq"] = (int) ($rollA["diceCount"] ?? 3);
+$qs["am"] = (int) ($rollA["mod"] ?? 0);
+$qs["ad"] = $modeToAd[(string) ($rollA["mode"] ?? "sum")] ?? "none";
 
 if (($rollA["dieKind"] ?? "normal") === "fudge") {
-    $qs["df"] = 1;
-    $qs["ds"] = 6;
+    $qs["af"] = 1;
+    $qs["as"] = 6;
 } else {
-    $qs["ds"] = (int) ($rollA["sides"] ?? 6);
+    $qs["as"] = (int) ($rollA["sides"] ?? 6);
 }
 
 if ($activeB) {
-    $qs["mdq"] = (int) ($rollB["diceCount"] ?? 0);
-    $qs["mds"] = (int) ($rollB["sides"] ?? 6);
-    $qs["mdm"] = (int) ($rollB["mod"] ?? 0);
-    $qs["mdd"] = $modeToDd[(string) ($rollB["mode"] ?? "sum")] ?? "none";
+    $qs["bq"] = (int) ($rollB["diceCount"] ?? 0);
+    $qs["bs"] = (int) ($rollB["sides"] ?? 6);
+    $qs["bm"] = (int) ($rollB["mod"] ?? 0);
+    $qs["bd"] = $modeToAd[(string) ($rollB["mode"] ?? "sum")] ?? "none";
 }
 
 $qs["dt"] = (int) $repeat;
@@ -523,8 +514,8 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
     <meta charset="utf-8">
     <title>Secure Dice Results</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-	<link rel="stylesheet" href="securedice.base.css">
-	<link rel="stylesheet" href="securedice.mobile.css">
+    <link rel="stylesheet" href="securedice.base.css">
+    <link rel="stylesheet" href="securedice.mobile.css">
     <script src="securedice.js" defer></script>
 </head>
 <body>
@@ -551,13 +542,13 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
 
 <div class="card">
     <div class="results-info">
-		<?= h((string) $repeat) ?> ×
-		<span class="pill"><?= h(format_roll_summary($labelA, (int) ($rollA["mod"] ?? 0), $modeALabel)) ?></span>
+        <?= h((string) $repeat) ?> ×
+        <span class="pill"><?= h(format_roll_summary($labelA, (int) ($rollA["mod"] ?? 0), $modeALabel)) ?></span>
 
-		<?php if ($activeB): ?>
-			&nbsp; <?= h($rollBConnector) ?> &nbsp;
-			<span class="pill"><?= h(format_roll_summary($labelB, (int) ($rollB["mod"] ?? 0), $modeBLabel)) ?></span>
-		<?php endif; ?>
+        <?php if ($activeB): ?>
+            &nbsp; <?= h($rollBConnector) ?> &nbsp;
+            <span class="pill"><?= h(format_roll_summary($labelB, (int) ($rollB["mod"] ?? 0), $modeBLabel)) ?></span>
+        <?php endif; ?>
     </div>
 
     <div class="results-info">
@@ -576,16 +567,8 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
 
 <div class="card">
     <table class="results-table">
-        <thead>
-            <tr>
-                <th>Set</th>
-                <th colspan="<?= (int) $diceColumns ?>">Dice</th>
-                <th>Details</th>
-                <th colspan="2">Totals</th>
-            </tr>
-        </thead>
         <tbody>
-            <?php foreach ($trials as $i => $t): ?>
+            <?php foreach ($displayTrials as $i => $t): ?>
                 <?php if ($i >= $showLimit): ?>
                     <?php break; ?>
                 <?php endif; ?>
@@ -595,39 +578,71 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
                 $rB = is_array($t["rollB"] ?? null) ? $t["rollB"] : null;
                 $final = (int) ($t["final"] ?? 0);
 
-                $setNum = (string) ($i + 1);
-                $setLabelA = $setNum;
-                $setLabelB = "";
+                $setNum = (string) ((int) ($t["_originalIndex"] ?? $i) + 1);
+                $setLabelA = "Set " . $setNum;
+                $setLabelB = $rollBConnector;
 
                 $itemsA = build_dice_items($rA);
-
-                if ($sortResults) {
-                    $itemsA = sort_dice_items($itemsA);
-                }
                 ?>
+
+                <!-- results.php -->
 
                 <tr class="results-a">
                     <td class="col-num"><?= h($setLabelA) ?></td>
 
-					<td class="col-dice">
-						<div class="dice-chip-wrap">
-							<?php foreach ($itemsA as $it): ?>
-								<?php
-								echo render_die_chip_html($it, $emdashChar);
-								?>
-							<?php endforeach; ?>
-						</div>
-					</td>
+                    <td class="col-dice">
+                        <div class="dice-chip-wrap">
+                            <?php foreach ($itemsA as $it): ?>
+                                <?php
+                                echo render_die_chip_html($it, $emdashChar);
+                                ?>
+                            <?php endforeach; ?>
+                        </div>
+                    </td>
 
-                    <td class="col-details"><?= render_special_detail($rA, $sortResults, $emdashChar) ?></td>
+                    <td class="col-details">
+                        <?php
+                        $diceTotalA = (int) ($rA["total"] ?? 0);
+                        $modA = (int) ($rA["mod"] ?? 0);
 
-                    <td class="col-total">
+                        $specialA = is_array($rA["special"] ?? null)
+                            ? $rA["special"]
+                            : null;
+
+                        if (
+                            $specialA
+                            && (string) ($specialA["kind"] ?? "") === "wild"
+                            && !empty($specialA["complication"])
+                        ) {
+                            $diceTotalA += (int) ($specialA["removed_highest"] ?? 0);
+                        }
+
+                        echo h((string) $diceTotalA);
+
+                        if ($modA !== 0) {
+                            echo " "
+                                . h(($modA < 0) ? "-" : "+")
+                                . " "
+                                . h((string) abs($modA));
+                        }
+
+                        $specialDetailA = render_special_detail($rA, false);
+
+                        if ($specialDetailA !== "") {
+                            echo "<br>" . $specialDetailA;
+                        }
+                        ?>
+                    </td>
+
+                    <td class="col-total<?= !is_array($rB) ? " is-final" : "" ?>">
                         <?php
                         $totalFinalA = (int) ($rA["total_final"] ?? 0);
 
                         if (!is_array($rB)) {
                             echo "<b>";
                         }
+
+                        echo "= ";
 
                         echo h(
                             ((string) ($rA["die_kind"] ?? "normal") === "fudge")
@@ -646,41 +661,83 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
                     <?php
                     $itemsB = build_dice_items($rB);
 
-                    if ($sortResults) {
-                        $itemsB = sort_dice_items($itemsB);
-                    }
-
                     $totalFinalB = (int) ($rB["total_final"] ?? 0);
                     ?>
                     <tr class="results-b">
                         <td class="col-num"><?= h($setLabelB) ?></td>
 
-						<td class="col-dice">
-							<div class="dice-chip-wrap">
-								<?php foreach ($itemsB as $it): ?>
-									<?php
-									echo render_die_chip_html($it, $emdashChar);
-									?>
-								<?php endforeach; ?>
-							</div>
-						</td>
+                        <td class="col-dice">
+                            <div class="dice-chip-wrap">
+                                <?php foreach ($itemsB as $it): ?>
+                                    <?php
+                                    echo render_die_chip_html($it, $emdashChar);
+                                    ?>
+                                <?php endforeach; ?>
+                            </div>
+                        </td>
 
-                        <td class="col-details"><?= render_special_detail($rB, $sortResults, $emdashChar) ?></td>
-
-                        <td class="col-total">
+                        <td class="col-details">
                             <?php
-                            $rowBSignChar = ($rollBSign < 0) ? $negativeChar : "+";
+                            $rowBParenSign = ($rollBSign < 0) ? "-" : "+";
 
-                            echo h($rowBSignChar) . " " . h(
-                                ((string) ($rB["die_kind"] ?? "normal") === "fudge")
-                                    ? format_signed_int_txt($totalFinalB)
-                                    : (string) $totalFinalB
-                            );
-                            echo " = ";
-                            echo "<b>" . h(
+                            $diceTotalB = (int) ($rB["total"] ?? 0);
+                            $modB = (int) ($rB["mod"] ?? 0);
+
+                            $specialB = is_array($rB["special"] ?? null)
+                                ? $rB["special"]
+                                : null;
+
+                            if (
+                                $specialB
+                                && (string) ($specialB["kind"] ?? "") === "wild"
+                                && !empty($specialB["complication"])
+                            ) {
+                                $diceTotalB += (int) ($specialB["removed_highest"] ?? 0);
+                            }
+
+                            echo h($rowBParenSign) . " ( ";
+                            echo h((string) $diceTotalB);
+
+                            if ($modB !== 0) {
+                                echo " "
+                                    . h(($modB < 0) ? "-" : "+")
+                                    . " "
+                                    . h((string) abs($modB));
+                            }
+
+                            $specialDetailB = render_special_detail($rB, false);
+
+                            if ($specialDetailB !== "") {
+                                echo "<br>" . $specialDetailB;
+                            }
+
+                            echo " )";
+                            ?>
+                        </td>
+
+                        <td class="col-total is-final">
+                            <?php
+                            $displayTotalB = $final;
+
+                            $specialB = is_array($rB["special"] ?? null)
+                                ? $rB["special"]
+                                : null;
+
+                            if ($specialB && (string) ($specialB["kind"] ?? "") === "wild") {
+                                $displayTotalB = (int) ($rB["total_final"] ?? $final);
+
+                                if (!empty($specialB["complication"])) {
+                                    $removedValue = (int) ($specialB["removed_highest"] ?? 0);
+                                    $baseTotalB = (int) ($rB["total_final"] ?? 0);
+
+                                    $displayTotalB = $baseTotalB - $removedValue;
+                                }
+                            }
+
+                            echo "<b>= " . h(
                                 $isFudgeOutput
-                                    ? format_signed_int_txt($final)
-                                    : (string) $final
+                                    ? format_signed_int_txt($displayTotalB)
+                                    : (string) $displayTotalB
                             ) . "</b>";
                             ?>
                         </td>

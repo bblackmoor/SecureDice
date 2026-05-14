@@ -31,7 +31,7 @@ $allowedModesRow2 = [
     'drop_highest',
 ];
 
-$ddMap = [
+$adMap = [
     'none' => 'sum',
     'lowest' => 'drop_lowest',
     'highest' => 'drop_highest',
@@ -39,7 +39,7 @@ $ddMap = [
     'stunt' => 'stunt',
 ];
 
-$mddMap = [
+$bdMap = [
     'none' => 'sum',
     'lowest' => 'drop_lowest',
     'highest' => 'drop_highest',
@@ -139,31 +139,30 @@ function do_one_roll(
 
 try {
     if ($useGetPresets) {
-        // Legacy GET keys (+ new optional key df)
-        $diceCountA = read_int('dq', 3, true);
-        $dsA = read_int('ds', 6, true);
-        $dfA = read_int('df', 0, true);
-        $modA = read_int('dm', 0, true);
-        $ddA = strtolower(read_str('dd', 'none', true));
+        $diceCountA = read_int('aq', 3, true);
+        $asA = read_int('as', 6, true);
+        $afA = read_int('af', 0, true);
+        $modA = read_int('am', 0, true);
+        $adA = strtolower(read_str('ad', 'none', true));
 
-        $diceCountB = read_int('mdq', 0, true);
-        $dsB = read_int('mds', 6, true);
-        $modB = read_int('mdm', 0, true);
-        $ddB = strtolower(read_str('mdd', 'none', true));
+        $diceCountB = read_int('bq', 0, true);
+        $asB = read_int('bs', 6, true);
+        $modB = read_int('bm', 0, true);
+        $adB = strtolower(read_str('bd', 'none', true));
 
         $repeat = read_int('dt', 1, true);
         $sortResults = (read_int('sdt', 0, true) === 1);
 
-        if ($dfA === 1) {
+        if ($afA === 1) {
             $dieTypeRawA = 'd6f';
         } else {
-            $dieTypeRawA = 'd' . (in_array($dsA, $allowedSides, true) ? $dsA : 6);
+            $dieTypeRawA = 'd' . (in_array($asA, $allowedSides, true) ? $asA : 6);
         }
 
-        $modeA = $ddMap[$ddA] ?? 'sum';
+        $modeA = $adMap[$adA] ?? 'sum';
 
-        $dieTypeRawB = 'd' . (in_array($dsB, $allowedSides, true) ? $dsB : 6);
-        $modeB = $mddMap[$ddB] ?? 'sum';
+        $dieTypeRawB = 'd' . (in_array($asB, $allowedSides, true) ? $asB : 6);
+        $modeB = $bdMap[$adB] ?? 'sum';
     } else {
         // POST keys from form
         $diceCountA = read_int('dice_count', 3, false);

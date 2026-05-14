@@ -157,7 +157,7 @@ body {
 /* Form elements */
 
 label {
-    margin: var(--sd2-whitespace-md) 0 var(--sd2-text-size-sm) var(--sd2-whitespace-xs);
+    margin: var(--sd2-whitespace-xs);
     font-size: var(--sd2-text-size-md);
     font-weight: var(--sd2-text-weight-normal);
     color: rgba(11, 18, 32, 0.86);
@@ -320,35 +320,38 @@ th {
 
 .dice-builder {
     border-collapse: separate;
-    border-spacing: 0 var(--sd2-whitespace-sm);
+    border-spacing: 0 var(--sd2-whitespace-xs);
 }
 
-.dice-row td {
+.dice-section-title td,
+.dice-row td,
+.dice-mode-row td,
+.roll-repeat td {
     padding: 0;
     text-align: left;
     vertical-align: middle;
 }
 
-.dice-row .col-num {
+.dice-section-title label {
+    display: inline-block;
+    font-size: var(--sd2-text-size-md);
+    font-weight: var(--sd2-text-weight-semibold);
+}
+
+.dice-section-title-b td,
+.dice-section-title-repeat td {
+    padding-top: var(--sd2-whitespace-sm);
+}
+
+.dice-row .col-num,
+.dice-row .col-dice,
+.dice-row .col-mod {
+    padding-right: var(--sd2-whitespace-xs);
     white-space: nowrap;
 }
 
-.dice-row .col-num label {
-    display: inline-block;
-    margin-right: var(--sd2-whitespace-xs);
-}
-
-.dice-row .col-and {
-    padding: 0 var(--sd2-whitespace-xs);
-    white-space: nowrap;
-}
-
-.dice-row .col-and span {
-    display: inline-block;
-}
-
-.dice-row .col-mode {
-    width: 245px;
+.dice-mode-row td {
+    padding-top: var(--sd2-whitespace-xs);
 }
 
 #dice_count,
@@ -409,8 +412,6 @@ th {
     margin-left: var(--sd2-whitespace-lg);
 }
 
-label[for="dice_count"],
-label[for="dice_count_b"],
 .roll-repeat label {
     font-size: var(--sd2-text-size-md);
     font-weight: var(--sd2-text-weight-semibold);
@@ -443,9 +444,17 @@ label[for="dice_count_b"],
 /* Results */
 
 .results-table {
-    width: 100%;
     border-collapse: separate;
-    border-spacing: 0 6px;
+    border-spacing: 0;
+}
+
+.results-table tr.results-a:not(:first-child) td {
+    border-top: 6px solid transparent;
+    background-clip: padding-box;
+}
+
+.results-table tr.results-b td {
+    border-top: 0;
 }
 
 .results-table th {
@@ -453,7 +462,7 @@ label[for="dice_count_b"],
     color: var(--sd2-color-dark-grey);
     font-size: var(--sd2-text-size-sm);
     font-weight: var(--sd2-text-weight-heavy);
-    text-align: center;
+    text-align: left;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
@@ -464,15 +473,9 @@ label[for="dice_count_b"],
     border-top: 1px solid rgba(15, 23, 42, 0.10);
     border-bottom: 1px solid rgba(15, 23, 42, 0.10);
     background: rgba(213, 221, 237, 0.28);
-    vertical-align: middle;
+    vertical-align: top;
     line-height: 1.15;
-    text-align: center;
-}
-
-.results-table tr.results-a td.col-dice,
-.results-table tr.results-b td.col-dice {
-    padding-left: 1px;
-    padding-right: 1px;
+    text-align: left;
 }
 
 .results-table tr.results-a td:first-child,
@@ -492,18 +495,61 @@ label[for="dice_count_b"],
     background: rgba(207, 216, 220, 0.26);
 }
 
-.results-table td.col-num {
+.results-table tr.results-a td.col-num, 
+.results-table tr.results-b td.col-num {
     width: 38px;
+    white-space: nowrap;
+    padding-right: var(--sd2-whitespace-sm);
+    padding-left: 0;
     color: var(--sd2-color-dark-grey);
     font-size: var(--sd2-text-size-sm);
     font-weight: var(--sd2-text-weight-heavy);
     text-align: right;
+    vertical-align: middle;
 }
 
-.results-table td.col-dice {
+.results-table tr.results-b td.col-num {
+    font-weight: var(--sd2-text-weight-normal);
+}
+
+.results-table tr.results-a td.col-dice,
+.results-table tr.results-b td.col-dice {
     width: 420px;
+    padding-left: 1px;
+    padding-right: 1px;
     white-space: normal;
-    vertical-align: top;
+}
+
+.results-table tr.results-a td.col-details, 
+.results-table tr.results-b td.col-details {
+    width: 95px;
+    white-space: nowrap;
+    font-size: var(--sd2-text-size-md);
+    font-weight: var(--sd2-text-weight-heavy);
+    text-align: right;
+}
+
+.results-table tr.results-a td.col-details {
+    vertical-align: bottom;
+}
+
+.results-table tr.results-a td.col-total,
+.results-table tr.results-b td.col-total {
+    width: 95px;
+    white-space: nowrap;
+    font-size: var(--sd2-text-size-md);
+    font-weight: var(--sd2-text-weight-heavy);
+    text-align: left;
+}
+
+.results-table tr.results-a td.col-total.is-final,
+.results-table tr.results-b td.col-total.is-final {
+    font-size: var(--sd2-text-size-xl);
+    line-height: 1;
+}
+
+.results-table tr.results-a td.col-total {
+    vertical-align: bottom;
 }
 
 .dice-chip-wrap {
@@ -511,22 +557,6 @@ label[for="dice_count_b"],
     flex-wrap: wrap;
     gap: 4px;
     max-width: 420px;
-}
-
-.results-table td.col-details {
-    min-width: 180px;
-    border-left: 1px solid rgba(15, 23, 42, 0.12);
-    color: var(--sd2-color-dark-grey);
-    font-size: var(--sd2-text-size-md);
-    text-align: left;
-}
-
-.results-table td.col-total {
-    width: 70px;
-    border-left: 2px solid rgba(15, 23, 42, 0.18);
-    font-size: var(--sd2-text-size-lg);
-    font-weight: var(--sd2-text-weight-heavy);
-    text-align: right;
 }
 
 .die-chip {
@@ -576,13 +606,11 @@ label[for="dice_count_b"],
 
 .mod-bonus .mod-value,
 .mod-bonus {
-    font-weight: var(--sd2-text-weight-semibold);
     color: var(--sd2-color-special);
 }
 
 .mod-penalty .mod-value,
 .mod-penalty {
-    font-weight: var(--sd2-text-weight-semibold);
     color: var(--sd2-color-danger);
 }
 
