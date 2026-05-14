@@ -473,9 +473,9 @@ th {
     border-top: 1px solid rgba(15, 23, 42, 0.10);
     border-bottom: 1px solid rgba(15, 23, 42, 0.10);
     background: rgba(213, 221, 237, 0.28);
-    vertical-align: top;
     line-height: 1.15;
     text-align: left;
+    vertical-align: middle;
 }
 
 .results-table tr.results-a td:first-child,
@@ -505,7 +505,6 @@ th {
     font-size: var(--sd2-text-size-sm);
     font-weight: var(--sd2-text-weight-heavy);
     text-align: right;
-    vertical-align: middle;
 }
 
 .results-table tr.results-b td.col-num {
@@ -529,10 +528,6 @@ th {
     text-align: right;
 }
 
-.results-table tr.results-a td.col-details {
-    vertical-align: bottom;
-}
-
 .results-table tr.results-a td.col-total,
 .results-table tr.results-b td.col-total {
     width: 95px;
@@ -546,10 +541,6 @@ th {
 .results-table tr.results-b td.col-total.is-final {
     font-size: var(--sd2-text-size-xl);
     line-height: 1;
-}
-
-.results-table tr.results-a td.col-total {
-    vertical-align: bottom;
 }
 
 .dice-chip-wrap {
@@ -604,16 +595,6 @@ th {
     text-transform: uppercase;
 }
 
-.mod-bonus .mod-value,
-.mod-bonus {
-    color: var(--sd2-color-special);
-}
-
-.mod-penalty .mod-value,
-.mod-penalty {
-    color: var(--sd2-color-danger);
-}
-
 .pill {
     display: inline-block;
 
@@ -636,6 +617,23 @@ th {
 
 .die-special b :not(.no-special) {
     color: var(--sd2-color-special);
+}
+
+.detail-roll {
+    color: var(--sd2-color-highlight);
+    font-weight: var(--sd2-text-weight-semibold);
+}
+
+.mod-bonus .mod-value,
+.mod-bonus {
+    color: var(--sd2-color-special);
+    font-weight: var(--sd2-text-weight-semibold);
+}
+
+.mod-penalty .mod-value,
+.mod-penalty {
+    color: var(--sd2-color-danger);
+    font-weight: var(--sd2-text-weight-semibold);
 }
 
 .json {

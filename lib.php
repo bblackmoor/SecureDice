@@ -8,6 +8,11 @@ declare(strict_types=1);
  * RNG: random_int() (CSPRNG).
  */
 
+function h(string $s): string
+{
+    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+}
+
 function clamp_int(int $v, int $min, int $max): int
 {
     if ($v < $min) {
@@ -19,30 +24,6 @@ function clamp_int(int $v, int $min, int $max): int
     }
 
     return $v;
-}
-
-function safe_bool($v): bool
-{
-    if (is_bool($v)) {
-        return $v;
-    }
-
-    if (is_int($v)) {
-        return ($v !== 0);
-    }
-
-    if (is_string($v)) {
-        $t = strtolower(trim($v));
-
-        return (
-            $t === "1"
-            || $t === "true"
-            || $t === "yes"
-            || $t === "on"
-        );
-    }
-
-    return false;
 }
 
 /**

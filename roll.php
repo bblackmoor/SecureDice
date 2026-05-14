@@ -5,11 +5,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
 
-function h(string $s): string
-{
-    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
-}
-
 $useGetPresets = empty($_POST);
 
 $allowedDiceCountsRow1 = range(1, 20);
@@ -29,20 +24,6 @@ $allowedModesRow2 = [
     'sum',
     'drop_lowest',
     'drop_highest',
-];
-
-$adMap = [
-    'none' => 'sum',
-    'lowest' => 'drop_lowest',
-    'highest' => 'drop_highest',
-    'wild' => 'wild',
-    'stunt' => 'stunt',
-];
-
-$bdMap = [
-    'none' => 'sum',
-    'lowest' => 'drop_lowest',
-    'highest' => 'drop_highest',
 ];
 
 function read_int(string $key, int $default, bool $fromGet): int
@@ -143,12 +124,12 @@ try {
         $asA = read_int('as', 6, true);
         $afA = read_int('af', 0, true);
         $modA = read_int('am', 0, true);
-        $adA = strtolower(read_str('ad', 'none', true));
+        $adA = strtolower(read_str('ad', 'sum', true));
 
         $diceCountB = read_int('bq', 0, true);
         $asB = read_int('bs', 6, true);
         $modB = read_int('bm', 0, true);
-        $adB = strtolower(read_str('bd', 'none', true));
+        $adB = strtolower(read_str('bd', 'sum', true));
 
         $repeat = read_int('dt', 1, true);
         $sortResults = (read_int('sdt', 0, true) === 1);
@@ -159,10 +140,15 @@ try {
             $dieTypeRawA = 'd' . (in_array($asA, $allowedSides, true) ? $asA : 6);
         }
 
-        $modeA = $adMap[$adA] ?? 'sum';
+        $modeA = in_array($adA, $allowedModesRow1, true)
+            ? $adA
+            : 'sum';
 
         $dieTypeRawB = 'd' . (in_array($asB, $allowedSides, true) ? $asB : 6);
-        $modeB = $bdMap[$adB] ?? 'sum';
+
+        $modeB = in_array($adB, $allowedModesRow2, true)
+            ? $adB
+            : 'sum';
     } else {
         // POST keys from form
         $diceCountA = read_int('dice_count', 3, false);

@@ -5,11 +5,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
 
-function h(string $s): string
-{
-    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
-}
-
 function signed_label(int $n): string
 {
     $sign = ($n >= 0) ? '+' : '−';
@@ -62,8 +57,8 @@ $modeOptionsRow1 = [
     'sum'           => 'sum them all (default)',
     'drop_lowest'   => 'drop the lowest die',
     'drop_highest'  => 'drop the highest die',
-    'wild'          => 'use one as a wild die',
     'stunt'         => 'use one as a stunt die',
+    'wild'          => 'use one as a wild die',
 ];
 
 $modeOptionsRow2 = [
