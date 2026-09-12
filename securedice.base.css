@@ -37,8 +37,8 @@
 
     --sd2-field-size-xs: 5ch;
     --sd2-field-size-sm: 7ch;
-    --sd2-field-size-md: 13ch;
-    --sd2-field-size-lg: 22ch;
+    --sd2-field-size-md: 8ch;
+    --sd2-field-size-lg: 13ch;
     --sd2-field-size-xl: 26ch;
     --sd2-field-size-xxl: 32ch;
 }
@@ -362,13 +362,13 @@ th {
 
 #die_type,
 #die_type_b {
-    width: var(--sd2-field-size-md);
+    width: var(--sd2-field-size-lg);
     text-align: left;
 }
 
 #mod,
 #mod_b {
-    width: var(--sd2-field-size-sm);
+    width: var(--sd2-field-size-md);
     text-align: left;
 }
 
@@ -388,7 +388,7 @@ th {
 
 #mode,
 #mode_b {
-    width: var(--sd2-field-size-lg);
+    width: var(--sd2-field-size-xl);
 }
 
 .roll-repeat #repeat {

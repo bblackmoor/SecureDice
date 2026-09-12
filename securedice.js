@@ -146,7 +146,7 @@
 
         const bq = getSelectValue("dice_count_b");
         const dieB = getSelectValue("die_type_b");
-        const bm = getInputValue("mod_b");
+        const bm = getInputValue("mod_b").trim();
         const bd = mapModeToPreset(getSelectValue("mode_b"));
 
         const dt = getSelectValue("repeat");

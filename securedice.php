@@ -46,58 +46,56 @@ function get_qi(string $key): ?int
     return (int) $raw;
 }
 
-$allowedSides      = allowed_die_sides();
-$repeatOptions     = build_repeat_options();
+$allowedDieTypes = allowed_die_types();
+$repeatOptions = build_repeat_options();
 
-$diceOptions1      = range(0, 20);
-$diceOptions2      = range(1, 20);
-$diceOptions3      = range(-20, 20);
+$diceOptions1 = range(0, 20);
+$diceOptions2 = range(1, 20);
+$diceOptions3 = range(-20, 20);
 
 $modeOptionsRow1 = [
-    'sum'           => 'sum them all (default)',
-    'drop_lowest'   => 'drop the lowest die',
-    'drop_highest'  => 'drop the highest die',
-    'stunt'         => 'use one as a stunt die',
-    'wild'          => 'use one as a wild die',
+    'sum' => 'sum them all (default)',
+    'drop_lowest' => 'drop the lowest die',
+    'drop_highest' => 'drop the highest die',
+    'stunt' => 'use one as a stunt die',
+    'wild' => 'use one as a wild die',
 ];
 
 $modeOptionsRow2 = [
-    'sum'           => 'sum them all (default)',
-    'drop_lowest'   => 'drop the lowest die',
-    'drop_highest'  => 'drop the highest die',
+    'sum' => 'sum them all (default)',
+    'drop_lowest' => 'drop the lowest die',
+    'drop_highest' => 'drop the highest die',
 ];
 
-$dieTypeOptionsRow1 = [];
+$dieTypeOptionsRow1 = allowed_die_type_options(true);
+$dieTypeOptionsRow2 = allowed_die_type_options(false);
 
-foreach ($allowedSides as $s) {
-    $dieTypeOptionsRow1['d' . $s] = 'd' . $s;
+$adMap = [
+    'none' => 'sum',
+    'lowest' => 'drop_lowest',
+    'highest' => 'drop_highest',
+    'wild' => 'wild',
+    'stunt' => 'stunt',
+];
 
-    if ($s === 6) {
-        $dieTypeOptionsRow1['d6f'] = 'd6 (Fudge)';
-    }
-}
-
-$dieTypeOptionsRow2 = [];
-
-foreach ($allowedSides as $s) {
-    $dieTypeOptionsRow2['d' . $s] = 'd' . $s;
-}
-
-$adMap  = ['none' => 'sum', 'lowest' => 'drop_lowest', 'highest' => 'drop_highest', 'wild' => 'wild', 'stunt' => 'stunt'];
-$bdMap = ['none' => 'sum', 'lowest' => 'drop_lowest', 'highest' => 'drop_highest'];
+$bdMap = [
+    'none' => 'sum',
+    'lowest' => 'drop_lowest',
+    'highest' => 'drop_highest',
+];
 
 $defaultDiceCount1 = 3;
-$defaultDieType1   = 'd6';
-$defaultMod1       = 0;
-$defaultMode1      = 'sum';
+$defaultDieType1 = 'd6';
+$defaultMod1 = 0;
+$defaultMode1 = 'sum';
 
 $defaultDiceCount2 = 0;
-$defaultDieType2   = 'd6';
-$defaultMod2       = 0;
-$defaultMode2      = 'sum';
+$defaultDieType2 = 'd6';
+$defaultMod2 = 0;
+$defaultMode2 = 'sum';
 
-$defaultRepeat     = 1;
-$defaultSort       = false;
+$defaultRepeat = 1;
+$defaultSort = false;
 
 $pref_af = get_qi('af');
 
@@ -105,8 +103,15 @@ if (($aq = get_qi('aq')) !== null && in_array($aq, $diceOptions2, true)) {
     $defaultDiceCount1 = $aq;
 }
 
-if (($as = get_qi('as')) !== null && in_array($as, $allowedSides, true)) {
-    $defaultDieType1 = 'd' . $as;
+if (($as = get_qi('as')) !== null) {
+    $presetDieType1 = 'd' . $as;
+
+    if (
+        isset($allowedDieTypes[$presetDieType1])
+        && (string) $allowedDieTypes[$presetDieType1]['kind'] === 'normal'
+    ) {
+        $defaultDieType1 = $presetDieType1;
+    }
 }
 
 if (($am = get_qi('am')) !== null) {
@@ -129,8 +134,15 @@ if (($bq = get_qi('bq')) !== null && in_array($bq, $diceOptions3, true)) {
     $defaultDiceCount2 = $bq;
 }
 
-if (($bs = get_qi('bs')) !== null && in_array($bs, $allowedSides, true)) {
-    $defaultDieType2 = 'd' . $bs;
+if (($bs = get_qi('bs')) !== null) {
+    $presetDieType2 = 'd' . $bs;
+
+    if (
+        isset($allowedDieTypes[$presetDieType2])
+        && (string) $allowedDieTypes[$presetDieType2]['kind'] === 'normal'
+    ) {
+        $defaultDieType2 = $presetDieType2;
+    }
 }
 
 if (($bm = get_qi('bm')) !== null) {
@@ -153,9 +165,9 @@ if (($sdt = get_qi('sdt')) !== null && $sdt === 1) {
     $defaultSort = true;
 }
 
-$rollPageUrl  = build_absolute_url('securedice.php');
+$rollPageUrl = build_absolute_url('securedice.php');
 $exampleQuery = 'aq=7&as=4&dt=5&ad=highest&sdt=1';
-$exampleUrl   = $rollPageUrl . '?' . $exampleQuery;
+$exampleUrl = $rollPageUrl . '?' . $exampleQuery;
 ?>
 <!doctype html>
 <html lang="en">
@@ -441,7 +453,7 @@ $exampleUrl   = $rollPageUrl . '?' . $exampleQuery;
         Licensed under the GNU General Public License v3.0:
         <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">https://www.gnu.org/licenses/gpl-3.0.en.html</a><br>
         Source: <a href="https://github.com/bblackmoor/securedice">https://github.com/bblackmoor/securedice</a><br>
-        Last updated: <?= h(date("Y-m-d", filemtime(__FILE__))) ?>
+        Last updated: <?= h(date('Y-m-d', filemtime(__FILE__))) ?>
     </p>
 </footer>
 

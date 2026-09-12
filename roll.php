@@ -10,7 +10,7 @@ $useGetPresets = empty($_POST);
 $allowedDiceCountsRow1 = range(1, 20);
 $allowedDiceCountsRow2 = range(-20, 20);
 $allowedRepeats = build_repeat_options();
-$allowedSides = allowed_die_sides();
+$allowedDieTypes = allowed_die_types();
 
 $allowedModesRow1 = [
     'sum',
@@ -137,14 +137,26 @@ try {
         if ($afA === 1) {
             $dieTypeRawA = 'd6f';
         } else {
-            $dieTypeRawA = 'd' . (in_array($asA, $allowedSides, true) ? $asA : 6);
+            $presetDieTypeRawA = 'd' . $asA;
+            $dieTypeRawA = (
+                isset($allowedDieTypes[$presetDieTypeRawA])
+                && (string) $allowedDieTypes[$presetDieTypeRawA]['kind'] === 'normal'
+            )
+                ? $presetDieTypeRawA
+                : 'd6';
         }
 
         $modeA = in_array($adA, $allowedModesRow1, true)
             ? $adA
             : 'sum';
 
-        $dieTypeRawB = 'd' . (in_array($asB, $allowedSides, true) ? $asB : 6);
+        $presetDieTypeRawB = 'd' . $asB;
+        $dieTypeRawB = (
+            isset($allowedDieTypes[$presetDieTypeRawB])
+            && (string) $allowedDieTypes[$presetDieTypeRawB]['kind'] === 'normal'
+        )
+            ? $presetDieTypeRawB
+            : 'd6';
 
         $modeB = in_array($adB, $allowedModesRow2, true)
             ? $adB
