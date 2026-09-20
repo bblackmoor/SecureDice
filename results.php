@@ -269,7 +269,7 @@ $showLimit = 200;
     Licensed under the GNU General Public License v3.0:
     <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">https://www.gnu.org/licenses/gpl-3.0.en.html</a><br>
     Source: <a href="https://github.com/bblackmoor/securedice">https://github.com/bblackmoor/securedice</a><br>
-    Last updated: <?= h(date("Y-m-d", filemtime(__FILE__))) ?>
+    Last updated: <?= h(app_updated_date()) ?>
     (version <?= h(app_version()) ?>)
 </footer>
 

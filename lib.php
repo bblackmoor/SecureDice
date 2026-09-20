@@ -42,6 +42,29 @@ function app_version(): string
     return $version = $candidate;
 }
 
+function app_updated_date(): string
+{
+    static $updatedDate = null;
+
+    if ($updatedDate !== null) {
+        return $updatedDate;
+    }
+
+    $versionFile = __DIR__ . '/VERSION';
+
+    if (!is_readable($versionFile)) {
+        return $updatedDate = 'Unknown';
+    }
+
+    $modified = filemtime($versionFile);
+
+    if ($modified === false) {
+        return $updatedDate = 'Unknown';
+    }
+
+    return $updatedDate = date('Y-m-d', $modified);
+}
+
 function clamp_int(int $v, int $min, int $max): int
 {
     if ($v < $min) {
