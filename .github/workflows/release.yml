@@ -46,6 +46,15 @@ jobs:
         shell: bash
         run: |
           TAG="v$VERSION"
+
+          # A release can survive after its Git tag has been deleted. GitHub
+          # refuses to modify such a published release, so remove the stale
+          # release and recreate it below.
+          if gh release view "$TAG" >/dev/null 2>&1 && ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists without a valid tag; recreating it."
+            gh release delete "$TAG" --yes
+          fi
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ARCHIVE" --clobber
           else
