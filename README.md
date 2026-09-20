@@ -17,3 +17,13 @@ If you wish to run Secure Dice on your server, it requires:
 
 * PHP: https://www.php.net/</a></li>
 * PHPMailer: https://github.com/PHPMailer/PHPMailer
+
+## Versioning
+
+Secure Dice uses `2.0.(build number)` versions. The tracked pre-commit hook
+sets the build number to the number of the commit being created and records
+the complete version in `VERSION`. Configure a new clone to use the hook with:
+
+```shell
+git config core.hooksPath .githooks
+```

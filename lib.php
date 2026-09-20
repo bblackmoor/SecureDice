@@ -13,6 +13,35 @@ function h(string $s): string
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
+function app_version(): string
+{
+    static $version = null;
+
+    if ($version !== null) {
+        return $version;
+    }
+
+    $versionFile = __DIR__ . '/VERSION';
+
+    if (!is_readable($versionFile)) {
+        return $version = 'Unknown';
+    }
+
+    $contents = file_get_contents($versionFile);
+
+    if ($contents === false) {
+        return $version = 'Unknown';
+    }
+
+    $candidate = trim($contents);
+
+    if (preg_match('/^\d+\.\d+\.\d+$/', $candidate) !== 1) {
+        return $version = 'Unknown';
+    }
+
+    return $version = $candidate;
+}
+
 function clamp_int(int $v, int $min, int $max): int
 {
     if ($v < $min) {

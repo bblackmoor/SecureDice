@@ -1,0 +1,20 @@
+#!/bin/sh
+
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+version_file="$repo_root/VERSION"
+
+if [ ! -f "$version_file" ]; then
+    echo "Error: $version_file not found."
+    exit 1
+fi
+
+commit_count=$(git rev-list --count HEAD 2>/dev/null || printf '0')
+build=$((commit_count + 1))
+
+printf '2.0.%s\n' "$build" > "$version_file"
+
+git add "$version_file"
+
+echo "Updated Secure Dice version to 2.0.$build"
