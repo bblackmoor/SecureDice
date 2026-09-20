@@ -14,6 +14,10 @@ Secure Dice is a free, account-free online dice roller for tabletop roleplaying 
 
 Secure Dice is available at [RPG Library](https://www.rpglibrary.org/software/securedice/).
 
+## Download
+
+Versioned ZIP packages are published on [GitHub Releases](https://github.com/bblackmoor/SecureDice/releases). Each release provides `SecureDice-<version>.zip`, built automatically from the corresponding version.
+
 ## Screenshots
 
 ## Getting Started
