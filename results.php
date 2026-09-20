@@ -144,7 +144,7 @@ $showLimit = 200;
             Your roll results, summary stats, and a shareable preset URL.
         </p>
         <p class="site-subtitle">
-            Tip: Bookmark a preset URL once you've dialed in your favorite roll.
+            Tip: Bookmark preset URLs for your most frequently used rolls.
         </p>
     </div>
 </header>

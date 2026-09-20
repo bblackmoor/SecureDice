@@ -196,7 +196,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
             Roll common dice patterns with optional subtraction, sorting, and URL presets.
         </p>
         <p class="site-subtitle">
-            Tip: Bookmark a preset URL once you've dialed in your favorite roll.
+            Tip: Bookmark preset URLs for your most frequently used rolls.
         </p>
     </div>
 </header>
