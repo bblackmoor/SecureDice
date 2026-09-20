@@ -105,6 +105,10 @@ Configure a new clone to use the hook with:
 git config core.hooksPath .githooks
 ```
 
+## AI Disclaimer
+
+AI-assisted tools were used during the development of this project. The author reviewed and approved the resulting code and documentation and remains responsible for the project.
+
 ---
 
 Copyright © 2005-2026 Brandon Blackmoor (<bblackmoor@blackgate.net>)<br>
