@@ -87,34 +87,18 @@ function do_one_roll(
         $rolls = roll_set($diceCount, $sides);
     }
 
-    $applied = apply_mode($rolls, $mode, $sides, $diceCount);
-
-    $totalDice = (int) $applied['total_dice'];
-    $special = $applied['special'];
-
-    $stuntValue = null;
-
-    if ($special && ($special['kind'] ?? '') === 'stunt') {
-        $stuntValue = (int) ($special['value'] ?? 0);
-    }
-
-    $totalFinal = $totalDice + $mod;
+    $applied = apply_mode($rolls, $mode, $sides, $rolls_raw);
+    $diceTotal = (int) $applied['dice_total'];
+    $total = $diceTotal + $mod;
 
     return [
-        'rolls' => $rolls,
-        'rolls_raw' => $rolls_raw,
-        'dropped' => $applied['dropped_rolls'],
-        'dropped_indices' => $applied['dropped_indices'],
-        'special' => $special,
-        'die_kind' => $kind,
-        'die_sides' => $sides,
-        'die_label' => (string) $dt['label'],
-        'dice_count' => $diceCount,
-        'mod' => $mod,
+        'dice' => $applied['dice'],
+        'dice_total' => $diceTotal,
+        'modifier' => $mod,
+        'total' => $total,
         'mode' => $mode,
-        'total_dice' => $totalDice,
-        'total_final' => $totalFinal,
-        'stunt_value' => $stuntValue,
+        'die_kind' => $kind,
+        'special' => $applied['special'],
     ];
 }
 
@@ -273,7 +257,7 @@ try {
     $activeB = ($diceCountBRoll > 0);
 
     // Trials
-    $trials = [];
+    $sets = [];
     $totals = [];
 
     for ($i = 0; $i < $repeat; $i++) {
@@ -285,12 +269,29 @@ try {
             $r2 = do_one_roll($diceCountBRoll, $dieTypeRawB, $modeB, $modB);
         }
 
-        $final = $r1['total_final'] + ($r2 ? ($diceCountBSign * $r2['total_final']) : 0);
+        $terms = [
+            [
+                'pool' => 'A',
+                'operator' => 1,
+                'result' => $r1,
+            ],
+        ];
 
-        $trials[] = [
-            'rollA' => $r1,
-            'rollB' => $r2,
-            'final' => $final,
+        $final = (int) $r1['total'];
+
+        if ($r2 !== null) {
+            $terms[] = [
+                'pool' => 'B',
+                'operator' => $diceCountBSign,
+                'result' => $r2,
+            ];
+            $final += $diceCountBSign * (int) $r2['total'];
+        }
+
+        $sets[] = [
+            'number' => $i + 1,
+            'terms' => $terms,
+            'total' => $final,
         ];
 
         $totals[] = $final;
@@ -304,34 +305,35 @@ try {
     session_start();
 
     $_SESSION['last_roll'] = [
-        'ts' => time(),
-        'input' => [
+        'schema_version' => 2,
+        'generated_at' => gmdate(DATE_ATOM),
+        'specification' => [
             'repeat' => $repeat,
-            'sortResults' => $sortResults,
-            'activeB' => $activeB,
-            'rollA' => [
-                'diceCount' => $diceCountA,
-                'dieTypeRaw' => $dieTypeRawA,
-                'dieKind' => $dieA['kind'],
-                'sides' => (int) $dieA['sides'],
-                'dieLabel' => (string) $dieA['label'],
-                'mod' => $modA,
-                'mode' => $modeA,
-            ],
-            'rollB' => [
-                'diceCount' => $diceCountB,
-                'diceCountAbs' => $diceCountBRoll,
-                'sign' => $diceCountBSign,
-                'dieTypeRaw' => $dieTypeRawB,
-                'dieKind' => $dieB['kind'],
-                'sides' => (int) $dieB['sides'],
-                'dieLabel' => (string) $dieB['label'],
-                'mod' => $modB,
-                'mode' => $modeB,
+            'sort_results' => $sortResults,
+            'pools' => [
+                'A' => [
+                    'dice_count' => $diceCountA,
+                    'die_type' => $dieTypeRawA,
+                    'die_kind' => $dieA['kind'],
+                    'sides' => (int) $dieA['sides'],
+                    'die_label' => (string) $dieA['label'],
+                    'modifier' => $modA,
+                    'mode' => $modeA,
+                ],
+                'B' => $activeB ? [
+                    'dice_count' => $diceCountBRoll,
+                    'operator' => $diceCountBSign,
+                    'die_type' => $dieTypeRawB,
+                    'die_kind' => $dieB['kind'],
+                    'sides' => (int) $dieB['sides'],
+                    'die_label' => (string) $dieB['label'],
+                    'modifier' => $modB,
+                    'mode' => $modeB,
+                ] : null,
             ],
         ],
         'summary' => $summary,
-        'trials' => $trials,
+        'sets' => $sets,
     ];
 
     header('Location: results.php');

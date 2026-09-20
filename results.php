@@ -10,53 +10,38 @@ session_start();
 
 $data = $_SESSION["last_roll"] ?? null;
 
-if (!is_array($data)) {
+if (!is_array($data) || (int) ($data["schema_version"] ?? 0) !== 2) {
     header("Location: securedice.php");
     exit;
 }
 
-$input = is_array($data["input"] ?? null)
-    ? $data["input"]
+$specification = is_array($data["specification"] ?? null)
+    ? $data["specification"]
     : [];
-
 $summary = is_array($data["summary"] ?? null)
     ? $data["summary"]
-    : [
-        "min" => 0,
-        "max" => 0,
-        "avg" => 0.0,
-    ];
-
-$trials = is_array($data["trials"] ?? null)
-    ? $data["trials"]
+    : ["min" => 0, "max" => 0, "avg" => 0.0];
+$sets = is_array($data["sets"] ?? null) ? $data["sets"] : [];
+$pools = is_array($specification["pools"] ?? null)
+    ? $specification["pools"]
     : [];
+$poolA = is_array($pools["A"] ?? null) ? $pools["A"] : [];
+$poolB = is_array($pools["B"] ?? null) ? $pools["B"] : null;
+$repeat = (int) ($specification["repeat"] ?? count($sets));
+$sortResults = !empty($specification["sort_results"]);
+$isFudgeOutput = ((string) ($poolA["die_kind"] ?? "normal") === "fudge");
 
-$repeat = (int) ($input["repeat"] ?? count($trials));
-
-$sortResults = !empty($input["sortResults"]);
-$activeB = !empty($input["activeB"]);
-
-$displayTrials = [];
-
-foreach ($trials as $originalIndex => $trial) {
-    if (!is_array($trial)) {
-        continue;
-    }
-
-    $trial["_originalIndex"] = $originalIndex;
-    $displayTrials[] = $trial;
-}
+$displaySets = $sets;
 
 if ($sortResults) {
-    usort($displayTrials, function (array $a, array $b): int {
-        $finalA = (int) ($a["final"] ?? 0);
-        $finalB = (int) ($b["final"] ?? 0);
+    usort($displaySets, function (array $a, array $b): int {
+        $totalComparison = (int) ($b["total"] ?? 0) <=> (int) ($a["total"] ?? 0);
 
-        if ($finalA !== $finalB) {
-            return $finalB <=> $finalA;
+        if ($totalComparison !== 0) {
+            return $totalComparison;
         }
 
-        return ((int) ($a["_originalIndex"] ?? 0)) <=> ((int) ($b["_originalIndex"] ?? 0));
+        return (int) ($a["number"] ?? 0) <=> (int) ($b["number"] ?? 0);
     });
 }
 
@@ -67,28 +52,6 @@ $modeLabels = [
     "wild" => "wild die",
     "stunt" => "stunt die",
 ];
-
-$emdashChar = "—";
-$showLimit = 200;
-
-$rollA = is_array($input["rollA"] ?? null)
-    ? $input["rollA"]
-    : [];
-
-$rollB = is_array($input["rollB"] ?? null)
-    ? $input["rollB"]
-    : [];
-
-$labelA = (string) ($rollA["diceCount"] ?? 0) . (string) ($rollA["dieLabel"] ?? "");
-$modeALabel = $modeLabels[(string) ($rollA["mode"] ?? "")] ?? (string) ($rollA["mode"] ?? "");
-
-$rollBSign = ((int) ($rollB["sign"] ?? 1) < 0) ? -1 : 1;
-$rollBConnector = ($rollBSign < 0) ? "minus" : "plus";
-$rollBDiceCountAbs = (int) ($rollB["diceCountAbs"] ?? abs((int) ($rollB["diceCount"] ?? 0)));
-
-$labelB = (string) $rollBDiceCountAbs . (string) ($rollB["dieLabel"] ?? "");
-$modeBLabel = $modeLabels[(string) ($rollB["mode"] ?? "")] ?? (string) ($rollB["mode"] ?? "");
-
 $modeToAd = [
     "sum" => "none",
     "drop_lowest" => "lowest",
@@ -97,27 +60,40 @@ $modeToAd = [
     "stunt" => "stunt",
 ];
 
-$qs = [];
+$labelA = (string) ((int) ($poolA["dice_count"] ?? 0))
+    . (string) ($poolA["die_label"] ?? "");
+$modeALabel = $modeLabels[(string) ($poolA["mode"] ?? "")] ?? "";
 
-$qs["aq"] = (int) ($rollA["diceCount"] ?? 3);
-$qs["am"] = (int) ($rollA["mod"] ?? 0);
-$qs["ad"] = $modeToAd[(string) ($rollA["mode"] ?? "sum")] ?? "none";
+$qs = [
+    "aq" => (int) ($poolA["dice_count"] ?? 3),
+    "am" => (int) ($poolA["modifier"] ?? 0),
+    "ad" => $modeToAd[(string) ($poolA["mode"] ?? "sum")] ?? "none",
+];
 
-if (($rollA["dieKind"] ?? "normal") === "fudge") {
+if ($isFudgeOutput) {
     $qs["af"] = 1;
     $qs["as"] = 6;
 } else {
-    $qs["as"] = (int) ($rollA["sides"] ?? 6);
+    $qs["as"] = (int) ($poolA["sides"] ?? 6);
 }
 
-if ($activeB) {
-    $qs["bq"] = (int) ($rollB["diceCount"] ?? 0);
-    $qs["bs"] = (int) ($rollB["sides"] ?? 6);
-    $qs["bm"] = (int) ($rollB["mod"] ?? 0);
-    $qs["bd"] = $modeToAd[(string) ($rollB["mode"] ?? "sum")] ?? "none";
+$labelB = "";
+$modeBLabel = "";
+$poolBOperator = 1;
+
+if ($poolB !== null) {
+    $poolBOperator = ((int) ($poolB["operator"] ?? 1) < 0) ? -1 : 1;
+    $labelB = (string) ((int) ($poolB["dice_count"] ?? 0))
+        . (string) ($poolB["die_label"] ?? "");
+    $modeBLabel = $modeLabels[(string) ($poolB["mode"] ?? "")] ?? "";
+
+    $qs["bq"] = $poolBOperator * (int) ($poolB["dice_count"] ?? 0);
+    $qs["bs"] = (int) ($poolB["sides"] ?? 6);
+    $qs["bm"] = (int) ($poolB["modifier"] ?? 0);
+    $qs["bd"] = $modeToAd[(string) ($poolB["mode"] ?? "sum")] ?? "none";
 }
 
-$qs["dt"] = (int) $repeat;
+$qs["dt"] = $repeat;
 
 if ($sortResults) {
     $qs["sdt"] = 1;
@@ -125,9 +101,9 @@ if ($sortResults) {
 
 $rollAgainUrl = "securedice.php?" . http_build_query($qs, "", "&", PHP_QUERY_RFC3986);
 $rollAgainAbs = build_absolute_url($rollAgainUrl);
-
-$rollPageUrl = build_absolute_url("securedice.php");
-$exampleUrl = $rollPageUrl . "?" . http_build_query($qs, "", "&", PHP_QUERY_RFC3986);
+$exampleUrl = build_absolute_url("securedice.php")
+    . "?"
+    . http_build_query($qs, "", "&", PHP_QUERY_RFC3986);
 
 $jsonForUser = json_encode(
     $data,
@@ -139,8 +115,7 @@ if ($jsonForUser === false) {
 }
 
 $jsonMd5 = md5($jsonForUser);
-
-$isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
+$showLimit = 200;
 ?>
 <!doctype html>
 <html lang="en">
@@ -177,11 +152,19 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
 <div class="card">
     <div class="results-info">
         <?= h((string) $repeat) ?> ×
-        <span class="pill"><?= h(format_roll_summary($labelA, (int) ($rollA["mod"] ?? 0), $modeALabel)) ?></span>
+        <span class="pill"><?= h(format_roll_summary(
+            $labelA,
+            (int) ($poolA["modifier"] ?? 0),
+            $modeALabel
+        )) ?></span>
 
-        <?php if ($activeB): ?>
-            &nbsp; <?= h($rollBConnector) ?> &nbsp;
-            <span class="pill"><?= h(format_roll_summary($labelB, (int) ($rollB["mod"] ?? 0), $modeBLabel)) ?></span>
+        <?php if ($poolB !== null): ?>
+            &nbsp; <?= h($poolBOperator < 0 ? "minus" : "plus") ?> &nbsp;
+            <span class="pill"><?= h(format_roll_summary(
+                $labelB,
+                (int) ($poolB["modifier"] ?? 0),
+                $modeBLabel
+            )) ?></span>
         <?php endif; ?>
     </div>
 
@@ -199,147 +182,62 @@ $isFudgeOutput = (($rollA["dieKind"] ?? "normal") === "fudge");
     </div>
 </div>
 
-<div class="card">
-    <table class="results-table">
-        <tbody>
-            <?php foreach ($displayTrials as $i => $t): ?>
-                <?php if ($i >= $showLimit): ?>
-                    <?php break; ?>
-                <?php endif; ?>
+<div class="card results-card">
+    <div class="result-sets">
+        <?php foreach ($displaySets as $displayIndex => $set): ?>
+            <?php if ($displayIndex >= $showLimit || !is_array($set)): ?>
+                <?php break; ?>
+            <?php endif; ?>
 
-                <?php
-                $rA = is_array($t["rollA"] ?? null) ? $t["rollA"] : [];
-                $rB = is_array($t["rollB"] ?? null) ? $t["rollB"] : null;
-                $final = (int) ($t["final"] ?? 0);
+            <?php
+            $setNumber = (int) ($set["number"] ?? ($displayIndex + 1));
+            $setTotal = (int) ($set["total"] ?? 0);
+            $terms = is_array($set["terms"] ?? null) ? $set["terms"] : [];
+            ?>
 
-                $setNum = (string) ((int) ($t["_originalIndex"] ?? $i) + 1);
-                $setLabelA = "Set " . $setNum;
-                $setLabelB = $rollBConnector;
+            <section class="result-set" aria-labelledby="set-<?= h((string) $setNumber) ?>-title">
+                <h2 class="result-set-title" id="set-<?= h((string) $setNumber) ?>-title">
+                    Set <?= h((string) $setNumber) ?>
+                </h2>
 
-                $itemsA = build_dice_items($rA);
-                ?>
-
-                <tr class="results-a">
-                    <td class="col-num"><?= h($setLabelA) ?></td>
-
-                    <td class="col-dice">
-                        <div class="dice-chip-wrap">
-                            <?php foreach ($itemsA as $it): ?>
-                                <?php
-                                echo render_die_chip_html($it, $emdashChar);
-                                ?>
-                            <?php endforeach; ?>
-                        </div>
-                    </td>
-
-                    <td class="col-details">
+                <div class="expression-stack">
+                    <?php foreach ($terms as $termIndex => $term): ?>
                         <?php
-                        $specialDetailA = render_special_detail($rA);
-
-                        if ($specialDetailA !== "") {
-                            echo $specialDetailA . "<br>";
+                        if (!is_array($term)) {
+                            continue;
                         }
 
-                        $detailTotalA = get_detail_roll_total($rA);
-                        $modifierA = (int) ($rA["mod"] ?? 0);
+                        $result = is_array($term["result"] ?? null) ? $term["result"] : [];
+                        $operator = ($termIndex === 0)
+                            ? 1
+                            : (((int) ($term["operator"] ?? 1) < 0) ? -1 : 1);
 
-                        echo render_detail_expression(
-                            $detailTotalA,
-                            $modifierA
-                        );
+                        echo render_pool_expression_html($result, $operator);
                         ?>
-                    </td>
+                    <?php endforeach; ?>
+                </div>
 
-                    <td class="col-total<?= !is_array($rB) ? " is-final" : "" ?>">
-                        <?php
-                        $totalFinalA = get_detail_roll_total($rA) + (int) ($rA["mod"] ?? 0);
+                <div class="result-equation-total">
+                    <span aria-hidden="true">=</span>
+                    <strong><?= h(
+                        $isFudgeOutput
+                            ? format_signed_int_txt($setTotal)
+                            : (string) $setTotal
+                    ) ?></strong>
+                </div>
 
-                        if (!is_array($rB)) {
-                            echo "<b>";
-                        }
-
-                        echo "= ";
-
-                        echo h(
-                            ((string) ($rA["die_kind"] ?? "normal") === "fudge")
-                                ? format_signed_int_txt($totalFinalA)
-                                : (string) $totalFinalA
-                        );
-
-                        if (!is_array($rB)) {
-                            echo "</b>";
-                        }
-                        ?>
-                    </td>
-                </tr>
-
-                <?php if (is_array($rB)): ?>
+                <?php foreach ($terms as $term): ?>
                     <?php
-                    $itemsB = build_dice_items($rB);
+                    $result = is_array($term["result"] ?? null) ? $term["result"] : [];
+                    $note = render_special_note_html($result);
                     ?>
-                    <tr class="results-b">
-                        <td class="col-num"><?= h($setLabelB) ?></td>
-
-                        <td class="col-dice">
-                            <div class="dice-chip-wrap">
-                                <?php foreach ($itemsB as $it): ?>
-                                    <?php
-                                    echo render_die_chip_html($it, $emdashChar);
-                                    ?>
-                                <?php endforeach; ?>
-                            </div>
-                        </td>
-
-                        <td class="col-details">
-                            <?php
-                            $detailTotalB = get_detail_roll_total($rB);
-                            $modifierB = (int) ($rB["mod"] ?? 0);
-
-                            $rowBPrefix = ($rollBSign < 0)
-                                ? '<span class="mod-penalty">- </span>'
-                                : '<span class="mod-bonus">+ </span>';
-
-                            echo $rowBPrefix;
-
-                            echo render_roll_b_detail_expression(
-                                $detailTotalB,
-                                $modifierB
-                            );
-                            ?>
-                        </td>
-
-                        <td class="col-total is-final">
-                            <?php
-                            $displayTotalB = $final;
-
-                            $specialB = is_array($rB["special"] ?? null)
-                                ? $rB["special"]
-                                : null;
-
-                            if ($specialB && (string) ($specialB["kind"] ?? "") === "wild") {
-                                $displayTotalB = (int) ($rB["total_final"] ?? $final);
-
-                                if (!empty($specialB["complication"])) {
-                                    $removedValue = (int) ($specialB["removed_highest"] ?? 0);
-                                    $baseTotalB = (int) ($rB["total_final"] ?? 0);
-
-                                    $displayTotalB = $baseTotalB - $removedValue;
-                                }
-                            }
-
-                            echo "<b>= " . h(
-                                $isFudgeOutput
-                                    ? format_signed_int_txt($displayTotalB)
-                                    : (string) $displayTotalB
-                            ) . "</b>";
-                            ?>
-                        </td>
-                    </tr>
-                <?php endif; ?>
-
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+                    <?php if ($note !== ""): ?>
+                        <div class="result-special-note"><?= $note ?></div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </section>
+        <?php endforeach; ?>
+    </div>
 </div>
 
 <div class="card">

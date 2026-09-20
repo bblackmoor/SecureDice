@@ -252,78 +252,116 @@ function roll_set_fudge(int $count): array
     ];
 }
 
-function apply_mode(array $rolls, string $mode, int $sides, int $diceCount): array
+/**
+ * Apply a roll mode and return the canonical dice representation.
+ *
+ * Every die is represented once, with its display value, optional raw value,
+ * whether it contributes to the total, and its role. Renderers should use the
+ * returned totals directly rather than reconstructing them from the dice.
+ */
+function apply_mode(array $rolls, string $mode, int $sides, ?array $rawRolls = null): array
 {
-    $kept = $rolls;
-    $dropped = [];
-    $droppedIndices = [];
+    $dice = [];
+
+    foreach ($rolls as $index => $value) {
+        $die = [
+            "index" => (int) $index,
+            "value" => (int) $value,
+            "kept" => true,
+            "role" => "normal",
+        ];
+
+        if ($rawRolls !== null && array_key_exists($index, $rawRolls)) {
+            $die["raw_value"] = (int) $rawRolls[$index];
+        }
+
+        $dice[] = $die;
+    }
+
     $special = null;
 
     if ($mode === "drop_lowest") {
         $idx = index_of_extreme($rolls, false);
-        $dropped[] = $rolls[$idx];
-        $droppedIndices[] = $idx;
-        unset($kept[$idx]);
-        $kept = array_values($kept);
+        $dice[$idx]["kept"] = false;
     } elseif ($mode === "drop_highest") {
         $idx = index_of_extreme($rolls, true);
-        $dropped[] = $rolls[$idx];
-        $droppedIndices[] = $idx;
-        unset($kept[$idx]);
-        $kept = array_values($kept);
+        $dice[$idx]["kept"] = false;
     } elseif ($mode === "wild") {
         $wildIndex = count($rolls) - 1;
         $wildValue = (int) $rolls[$wildIndex];
+        $dice[$wildIndex]["role"] = "wild";
 
         if ($wildValue === 1) {
-            $highestIndex = index_of_extreme($rolls, true);
+            $otherRolls = $rolls;
+            unset($otherRolls[$wildIndex]);
+            $highestIndex = index_of_extreme($otherRolls, true);
             $removedHighest = (int) $rolls[$highestIndex];
 
-            $dropped[] = $removedHighest;
-            $droppedIndices[] = $highestIndex;
-            unset($kept[$highestIndex]);
-            $kept = array_values($kept);
+            $dice[$wildIndex]["kept"] = false;
+            $dice[$highestIndex]["kept"] = false;
 
             $special = [
                 "kind" => "wild",
-                "wild_index" => $wildIndex,
-                "value" => $wildValue,
+                "die_index" => $wildIndex,
+                "sequence" => [$wildValue],
                 "complication" => true,
+                "removed_highest_index" => $highestIndex,
                 "removed_highest" => $removedHighest,
             ];
         } else {
+            $sequence = [$wildValue];
+
+            while (end($sequence) === $sides) {
+                $nextValue = roll_one($sides);
+                $sequence[] = $nextValue;
+                $dice[] = [
+                    "index" => count($dice),
+                    "value" => $nextValue,
+                    "kept" => true,
+                    "role" => "wild_explosion",
+                ];
+            }
+
             $special = [
                 "kind" => "wild",
-                "wild_index" => $wildIndex,
-                "value" => $wildValue,
+                "die_index" => $wildIndex,
+                "sequence" => $sequence,
                 "complication" => false,
+                "removed_highest_index" => null,
                 "removed_highest" => null,
             ];
         }
     } elseif ($mode === "stunt") {
         $stuntIndex = count($rolls) - 1;
         $stuntValue = (int) $rolls[$stuntIndex];
+        $dice[$stuntIndex]["role"] = "stunt";
 
         $special = [
             "kind" => "stunt",
-            "stunt_index" => $stuntIndex,
+            "die_index" => $stuntIndex,
             "value" => $stuntValue,
         ];
     }
 
+    $diceTotal = 0;
+
+    foreach ($dice as $die) {
+        if (!empty($die["kept"])) {
+            $diceTotal += (int) $die["value"];
+        }
+    }
+
     return [
-        "kept" => $kept,
-        "dropped_rolls" => $dropped,
-        "dropped_indices" => $droppedIndices,
-        "total_dice" => array_sum($kept),
+        "dice" => $dice,
+        "dice_total" => $diceTotal,
         "special" => $special,
     ];
 }
 
 function index_of_extreme(array $values, bool $highest): int
 {
-    $bestIndex = 0;
-    $bestValue = (int) $values[0];
+    $bestIndex = (int) array_key_first($values);
+    $bestValue = (int) $values[$bestIndex];
 
     foreach ($values as $i => $v) {
         $v = (int) $v;
