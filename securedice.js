@@ -15,10 +15,30 @@
         const original = btn.textContent;
 
         btn.textContent = text;
+        announceAction(text);
 
         window.setTimeout(function () {
             btn.textContent = original;
         }, ms);
+    }
+
+    function announceAction(text) {
+        let status = qsId("action-status");
+
+        if (!status) {
+            status = document.createElement("div");
+            status.id = "action-status";
+            status.className = "sr-only";
+            status.setAttribute("role", "status");
+            status.setAttribute("aria-live", "polite");
+            status.setAttribute("aria-atomic", "true");
+            document.body.appendChild(status);
+        }
+
+        status.textContent = "";
+        window.setTimeout(function () {
+            status.textContent = text;
+        }, 20);
     }
 
     function copyToClipboard(text) {
@@ -244,7 +264,7 @@
         const dieTypeA = qsId("die_type");
         const modeA = qsId("mode");
 
-        const rowB = qsId("roll-b");
+        const secondaryRows = document.querySelectorAll(".roll-b, .dice-section-title-b");
         const diceCountB = qsId("dice_count_b");
         const dieTypeB = qsId("die_type_b");
         const modB = qsId("mod_b");
@@ -296,9 +316,9 @@
 
         const hideRowB = (row1IsFudge || row1IsWild || row1IsStunt);
 
-        if (rowB) {
-            rowB.classList.toggle("hidden", hideRowB);
-        }
+        Array.prototype.forEach.call(secondaryRows, function (row) {
+            row.hidden = hideRowB;
+        });
 
         if (diceCountB) {
             diceCountB.disabled = hideRowB;
@@ -336,19 +356,35 @@
         }
 
         if (modeA) {
-            modeA.addEventListener("change", applyUI);
+            modeA.addEventListener("change", function () {
+                modeA.setCustomValidity("");
+                applyUI();
+            });
         }
 
         if (diceCountA) {
-            diceCountA.addEventListener("change", applyUI);
+            diceCountA.addEventListener("change", function () {
+                if (modeA) {
+                    modeA.setCustomValidity("");
+                }
+                applyUI();
+            });
         }
 
         if (diceCountB) {
-            diceCountB.addEventListener("change", applyUI);
+            diceCountB.addEventListener("change", function () {
+                if (modeB) {
+                    modeB.setCustomValidity("");
+                }
+                applyUI();
+            });
         }
 
         if (modeB) {
-            modeB.addEventListener("change", applyUI);
+            modeB.addEventListener("change", function () {
+                modeB.setCustomValidity("");
+                applyUI();
+            });
         }
 
         applyUI();
@@ -359,7 +395,7 @@
         const dieTypeA = qsId("die_type");
         const modeA = qsId("mode");
 
-        const rowB = qsId("roll-b");
+        const secondaryRows = document.querySelectorAll(".roll-b, .dice-section-title-b");
         const diceCountB = qsId("dice_count_b");
         const dieTypeB = qsId("die_type_b");
         const modB = qsId("mod_b");
@@ -377,9 +413,9 @@
             modeA.disabled = false;
         }
 
-        if (rowB) {
-            rowB.classList.remove("hidden");
-        }
+        Array.prototype.forEach.call(secondaryRows, function (row) {
+            row.hidden = false;
+        });
 
         if (diceCountB) {
             diceCountB.disabled = false;
@@ -406,13 +442,17 @@
 
         if (modeA && isDropMode(String(modeA.value || "")) && getAbsIntValue(diceCountA) < 2) {
             event.preventDefault();
-            alert("First roll: Drop modes require at least 2 dice.");
+            modeA.setCustomValidity("Primary roll drop modes require at least 2 dice.");
+            modeA.reportValidity();
+            modeA.focus();
             return;
         }
 
         if (modeB && !modeB.disabled && isDropMode(String(modeB.value || "")) && getAbsIntValue(diceCountB) < 2) {
             event.preventDefault();
-            alert("Second roll: Drop modes require at least 2 dice.");
+            modeB.setCustomValidity("Secondary roll drop modes require at least 2 dice.");
+            modeB.reportValidity();
+            modeB.focus();
         }
     }
 

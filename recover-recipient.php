@@ -49,6 +49,7 @@ $managementUrl = is_array($result)
     <script src="securedice.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -58,21 +59,21 @@ $managementUrl = is_array($result)
                 <span class="badge badge-primary">Link Recovery</span>
             </div>
         </div>
-        <p class="site-subtitle">Replace a lost management link without creating an account.</p>
+        <p class="site-subtitle">Replace a lost private settings link without creating an account.</p>
     </div>
 </header>
 
-<main>
+<main id="main-content" tabindex="-1">
     <section class="card consent-card" aria-labelledby="recovery-title">
         <?php if (is_array($result)): ?>
-            <h2 id="recovery-title">Management link replaced</h2>
-            <p>The previous management link for <strong><?= h($result['masked_email']) ?></strong> has been revoked.</p>
-            <div class="consent-notice is-success" role="status">Save this private replacement. A credentials message has also been queued for your address.</div>
+            <h2 id="recovery-title">Settings link replaced</h2>
+            <p>The previous settings link for <strong><?= h($result['masked_email']) ?></strong> has been revoked.</p>
+            <div class="consent-notice is-success" role="status">Save this private replacement. A copy has also been queued for your address.</div>
             <div class="secret-row">
                 <code class="secret-value secret-url"><?= h($managementUrl) ?></code>
                 <button class="sd2-action-btn neutral inline-action" type="button" data-copy="<?= h($managementUrl) ?>">Copy Link</button>
             </div>
-            <p><a class="sd2-action-btn primary inline-action" href="<?= h($managementUrl) ?>">Manage Consent</a></p>
+            <p><a class="sd2-action-btn primary inline-action" href="<?= h($managementUrl) ?>">Open Email Settings</a></p>
         <?php else: ?>
             <h2 id="recovery-title">Recovery unavailable</h2>
             <div class="consent-notice is-error" role="alert"><?= h($error) ?></div>

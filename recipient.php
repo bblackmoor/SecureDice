@@ -54,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="securedice.mobile.css">
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -63,15 +64,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <span class="badge badge-primary">Recipient Settings</span>
             </div>
         </div>
-        <p class="site-subtitle">Opt in once, recover your private management link, or return to revoke consent.</p>
+        <p class="site-subtitle">Opt in once, recover your private settings link, or return later to pause or revoke consent.</p>
     </div>
 </header>
 
-<main>
+<main id="main-content" tabindex="-1">
     <section class="card consent-card" aria-labelledby="consent-title">
         <h2 id="consent-title">Opt in or manage consent</h2>
-        <p>Enter your address. New recipients receive an opt-in confirmation; existing recipients receive a replacement management-link request. The response does not reveal whether an address is registered.</p>
-        <p>Your address is encrypted at rest. After confirmation, rollers may address results to you without an account or permanent recipient code.</p>
+        <p>Enter your address. A new recipient receives a one-time opt-in confirmation. An existing recipient receives a one-time link for replacing the private settings link. The on-screen response does not reveal whether the address is registered.</p>
+        <p>Your address is encrypted at rest. After confirmation, rollers can address results to you without an account or any code to share.</p>
 
         <?php if ($message !== ''): ?>
             <div class="consent-notice is-<?= h($status) ?>" role="<?= $status === 'error' ? 'alert' : 'status' ?>">
@@ -91,8 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 autocomplete="email"
                 inputmode="email"
                 required
+                aria-describedby="recipient-email-help"
             >
-            <p class="field-help">The emailed link expires after 24 hours.</p>
+            <p id="recipient-email-help" class="field-help">The emailed link expires after 24 hours. Secure Dice never emails results until the address confirms its opt-in.</p>
             <button class="sd2-action-btn primary inline-action" type="submit">Email My Private Link</button>
         </form>
     </section>

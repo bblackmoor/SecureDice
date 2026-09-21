@@ -91,6 +91,8 @@ http_response_code($statusCode);
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -105,7 +107,7 @@ http_response_code($statusCode);
     </div>
 </header>
 
-<main>
+<main id="main-content" tabindex="-1">
     <section class="card verification-status <?= $statusKind === 'prompt' ? 'is-prompt' : 'is-error' ?>" aria-labelledby="verification-title" <?= $statusKind === 'prompt' ? '' : 'role="alert"' ?>>
         <h2 id="verification-title"><?= h($statusTitle) ?></h2>
         <p><?= h($statusMessage) ?></p>

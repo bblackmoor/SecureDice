@@ -64,8 +64,28 @@ function render_die_chip_html(array $die, bool $isFudge): string
         $text = (string) $value;
     }
 
+    $statusLabels = [];
+    $roleLabels = [
+        "wild" => "wild die",
+        "wild_explosion" => "wild die explosion",
+        "stunt" => "stunt die",
+    ];
+
+    if (isset($roleLabels[$role])) {
+        $statusLabels[] = $roleLabels[$role];
+    }
+
+    if (empty($die["kept"])) {
+        $statusLabels[] = "dropped";
+    }
+
+    $screenReaderStatus = $statusLabels === []
+        ? ""
+        : '<span class="sr-only"> (' . h(implode(", ", $statusLabels)) . ')</span>';
+
     return '<span class="' . h(implode(" ", $classes)) . '">'
         . h($text)
+        . $screenReaderStatus
         . '</span>';
 }
 

@@ -181,6 +181,8 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -199,15 +201,16 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
             Tip: Bookmark preset URLs for your most frequently used rolls.
         </p>
         <p class="site-subtitle">
-            <a href="recipient.php">Opt in to result email or manage consent.</a>
+            <a href="recipient.php">Email opt-in and settings.</a>
             Already have a result ID? <a href="verify.php">Verify a stored result.</a>
         </p>
     </div>
 </header>
 
+<main id="main-content" tabindex="-1">
 <form id="sd2-form" method="post" action="roll.php">
 
-    <div class="floating-actions" aria-label="Quick actions">
+    <div class="floating-actions" role="group" aria-label="Roll actions">
         <button type="submit" class="sd2-action-btn primary">Roll Dice</button>
         <button id="sd2-copy-url" type="button" class="sd2-action-btn neutral">Copy URL</button>
         <button id="sd2-reset" type="button" class="sd2-action-btn danger">Reset</button>
@@ -223,7 +226,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
 
             <tr id="roll-a" class="roll-a dice-row">
                 <td class="col-num">
-                    <select id="dice_count" name="dice_count" required>
+                    <select id="dice_count" name="dice_count" aria-label="Primary number of dice" required>
                         <?php foreach ($diceOptions2 as $d): ?>
                             <option value="<?= (int) $d ?>" <?= ((int) $defaultDiceCount1 === (int) $d) ? 'selected' : '' ?>>
                                 <?= (int) $d ?>
@@ -233,7 +236,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
                 </td>
 
                 <td class="col-dice">
-                    <select id="die_type" name="die_type" required>
+                    <select id="die_type" name="die_type" aria-label="Primary die type" required>
                         <?php foreach ($dieTypeOptionsRow1 as $val => $label): ?>
                             <option value="<?= h($val) ?>" <?= ($defaultDieType1 === $val) ? 'selected' : '' ?>>
                                 <?= h($label) ?>
@@ -243,7 +246,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
                 </td>
 
                 <td class="col-mod">
-                    <select id="mod" name="mod">
+                    <select id="mod" name="mod" aria-label="Primary modifier">
                         <?php foreach ($diceOptions3 as $d): ?>
                             <option value="<?= (int) $d ?>" <?= ((int) $defaultMod1 === (int) $d) ? 'selected' : '' ?>>
                                 <?= signed_label((int) $d) ?>
@@ -267,13 +270,13 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
 
             <tr class="dice-section-title dice-section-title-b">
                 <td colspan="5">
-                    <label for="dice_count_b">Secondary Roll (+/-)</label>
+                    <label for="dice_count_b">Secondary Roll (optional)</label>
                 </td>
             </tr>
 
             <tr id="roll-b" class="roll-b dice-row">
                 <td class="col-num">
-                    <select id="dice_count_b" name="dice_count_b">
+                    <select id="dice_count_b" name="dice_count_b" aria-label="Secondary number of dice; positive adds and negative subtracts">
                         <?php foreach ($diceOptions3 as $d): ?>
                             <option value="<?= (int) $d ?>" <?= ((int) $defaultDiceCount2 === (int) $d) ? 'selected' : '' ?>>
                                 <?= signed_label((int) $d) ?>
@@ -283,7 +286,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
                 </td>
 
                 <td class="col-dice">
-                    <select id="die_type_b" name="die_type_b">
+                    <select id="die_type_b" name="die_type_b" aria-label="Secondary die type">
                         <?php foreach ($dieTypeOptionsRow2 as $val => $label): ?>
                             <option value="<?= h($val) ?>" <?= ($defaultDieType2 === $val) ? 'selected' : '' ?>>
                                 <?= h($label) ?>
@@ -293,7 +296,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
                 </td>
 
                 <td class="col-mod">
-                    <select id="mod_b" name="mod_b">
+                    <select id="mod_b" name="mod_b" aria-label="Secondary modifier">
                         <?php foreach ($diceOptions3 as $d): ?>
                             <option value="<?= (int) $d ?>" <?= ((int) $defaultMod2 === (int) $d) ? 'selected' : '' ?>>
                                 <?= signed_label((int) $d) ?>
@@ -324,7 +327,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
             <tr class="roll-repeat">
                 <td colspan="5">
                     <div class="roll-repeat-controls">
-                        <select id="repeat" name="repeat" required>
+                        <select id="repeat" name="repeat" aria-label="Number of result sets" required>
                             <?php foreach ($repeatOptions as $r): ?>
                                 <option value="<?= (int) $r ?>" <?= ((int) $defaultRepeat === (int) $r) ? 'selected' : '' ?>>
                                     <?= (int) $r ?>
@@ -361,7 +364,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
                 The first parameter uses <code>?</code>, additional parameters use <code>&amp;</code>.
             </p>
 
-            <table>
+            <table class="preset-table">
 
                 <tr>
                     <td><code>aq=</code></td>
@@ -449,6 +452,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
     </div>
 
 </form>
+</main>
 
 <footer class="site-footer" role="contentinfo">
     <p>

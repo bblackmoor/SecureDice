@@ -541,7 +541,7 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
     ];
 }
 
-/** Exchange an emailed recovery challenge for a replacement management link. */
+/** Exchange an emailed recovery challenge for a replacement private settings link. */
 function recover_recipient_management(string $submittedToken, string $sourceIp): array
 {
     enforce_consent_rate_limit('recovery-ip', $sourceIp, 20, 3600);
@@ -639,7 +639,7 @@ function find_recipient_management(string $submittedToken): array
     $record = $statement->fetch();
 
     if (!is_array($record)) {
-        throw new InvalidConsentTokenException('The management link is invalid or has been revoked.');
+        throw new InvalidConsentTokenException('The private settings link is invalid or has been revoked.');
     }
 
     return [
@@ -659,7 +659,7 @@ function get_recipient_management(string $submittedToken, string $sourceIp): arr
 function set_recipient_delivery_mode(string $managementToken, string $deliveryMode): void
 {
     if (!in_array($deliveryMode, ['tabletop', 'occasional', 'paused'], true)) {
-        throw new InvalidArgumentException('Choose a valid email frequency.');
+        throw new InvalidArgumentException('Choose a valid delivery setting.');
     }
 
     $management = find_recipient_management($managementToken);

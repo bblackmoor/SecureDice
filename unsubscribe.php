@@ -57,6 +57,7 @@ http_response_code($statusCode);
     <link rel="stylesheet" href="securedice.mobile.css">
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -70,7 +71,7 @@ http_response_code($statusCode);
     </div>
 </header>
 
-<main>
+<main id="main-content" tabindex="-1">
     <section class="card consent-card" aria-labelledby="unsubscribe-title">
         <?php if ($revoked): ?>
             <h2 id="unsubscribe-title">Email consent revoked</h2>
@@ -78,7 +79,7 @@ http_response_code($statusCode);
             <p>You can opt in again later if you change your mind.</p>
         <?php elseif (is_array($recipient)): ?>
             <h2 id="unsubscribe-title">Stop Secure Dice email?</h2>
-            <p>This immediately revokes consent for <strong><?= h($recipient['masked_email']) ?></strong>, including its private management link and pending result email.</p>
+            <p>This immediately revokes consent for <strong><?= h($recipient['masked_email']) ?></strong>, invalidates its private settings link, and cancels pending result email.</p>
             <?php if ($error !== ''): ?>
                 <div class="consent-notice is-error" role="alert"><?= h($error) ?></div>
             <?php endif; ?>

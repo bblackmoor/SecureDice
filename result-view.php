@@ -124,6 +124,8 @@ $showLimit = 200;
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -142,6 +144,8 @@ $showLimit = 200;
         </p>
     </div>
 </header>
+
+<main id="main-content" tabindex="-1">
 
 <section class="card verification-status is-verified" aria-labelledby="verification-title" role="status">
     <h2 id="verification-title">
@@ -178,7 +182,7 @@ $showLimit = 200;
 
 <section class="card email-result-card" aria-labelledby="email-result-title">
     <h2 id="email-result-title">Email this result</h2>
-    <p>Enter up to 10 recipient email addresses, separated by spaces, commas, or new lines. Secure Dice sends only to addresses that have confirmed their opt-in.</p>
+    <p>Enter up to 10 recipient email addresses, separated by spaces, commas, or new lines. Delivery is attempted only for addresses that have confirmed their opt-in.</p>
     <form class="email-result-form" method="post" action="email-result.php">
         <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
         <input type="hidden" name="result_id" value="<?= h($resultId) ?>">
@@ -193,8 +197,8 @@ $showLimit = 200;
             required
             aria-describedby="result-recipients-help"
         ></textarea>
-        <p id="result-recipients-help" class="field-help">No recipient names or addresses are disclosed in delivery notices.</p>
-        <button class="sd2-action-btn primary inline-action" type="submit">Queue Result Email</button>
+        <p id="result-recipients-help" class="field-help">The request response does not identify which addresses are opted in. Delivered messages contain counts, never recipient names or addresses.</p>
+        <button class="sd2-action-btn primary inline-action" type="submit">Send Result</button>
     </form>
 </section>
 
@@ -291,22 +295,23 @@ $showLimit = 200;
 
 <div class="card">
     <div class="results-info">
-        <div><b>Canonical result JSON:</b></div>
+        <label for="json-output"><b>Canonical result JSON:</b></label>
         <div>This is the exact result retained by the server.</div>
         <textarea id="json-output" class="json" readonly spellcheck="false" wrap="off"><?= h($canonicalJson) ?></textarea>
     </div>
 </div>
 
-<div class="floating-actions has-four-actions" aria-label="Quick actions">
+<div class="floating-actions has-four-actions" role="group" aria-label="Result actions">
     <a class="sd2-action-btn primary" href="<?= h($rollAgainUrl) ?>">Roll Again</a>
     <?php if ($isVerifiedView): ?>
         <a class="sd2-action-btn neutral" href="<?= h($downloadPath) ?>">Download JSON</a>
     <?php else: ?>
         <a class="sd2-action-btn neutral" href="<?= h($verificationPath) ?>">View Verified</a>
     <?php endif; ?>
-    <button class="sd2-action-btn neutral" type="button" id="copy-verification-url" data-copy="<?= h($verificationUrl) ?>">Copy Verify Link</button>
+    <button class="sd2-action-btn neutral" type="button" id="copy-verification-url" data-copy="<?= h($verificationUrl) ?>">Copy Verification Link</button>
     <button class="sd2-action-btn neutral" type="button" id="copy-json">Copy JSON</button>
 </div>
+</main>
 
 <footer class="site-footer" role="contentinfo">
     Copyright &copy; 2005-2026 Brandon Blackmoor

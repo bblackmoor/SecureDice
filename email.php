@@ -534,7 +534,7 @@ function build_email_message(array $messages): array
 
     if ($type === 'management_recovery') {
         $url = email_url('recover-recipient.php?token=' . rawurlencode((string) $payload['recovery_token']));
-        $body = "Recover or replace your private Secure Dice management link:\n\n{$url}\n\n"
+        $body = "Recover or replace your private Secure Dice settings link:\n\n{$url}\n\n"
             . "This one-time link expires at {$payload['expires_at']}. If you did not request it, ignore this message.";
         return ['to' => $email, 'subject' => 'Recover Secure Dice email settings', 'text' => $body];
     }
@@ -543,7 +543,7 @@ function build_email_message(array $messages): array
         $manage = email_url('manage-recipient.php?token=' . rawurlencode((string) $payload['management_token']));
         $unsubscribe = email_url('unsubscribe.php?token=' . rawurlencode((string) $payload['unsubscribe_token']));
         $body = "Your address is opted in to Secure Dice result email.\n\n"
-            . "Manage or pause email:\n{$manage}\n\nStop all Secure Dice email:\n{$unsubscribe}";
+            . "Change settings or pause result email:\n{$manage}\n\nStop all Secure Dice email:\n{$unsubscribe}";
         return ['to' => $email, 'subject' => 'Secure Dice email opt-in confirmed', 'text' => $body];
     }
 

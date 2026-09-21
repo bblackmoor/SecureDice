@@ -49,6 +49,7 @@ $managementUrl = is_array($result)
     <script src="securedice.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -62,22 +63,22 @@ $managementUrl = is_array($result)
     </div>
 </header>
 
-<main>
+<main id="main-content" tabindex="-1">
     <section class="card consent-card" aria-labelledby="confirmation-title">
         <?php if (is_array($result)): ?>
             <h2 id="confirmation-title">Recipient confirmed</h2>
             <p><strong><?= h($result['masked_email']) ?></strong> can now receive Secure Dice results.</p>
             <div class="consent-notice is-success" role="status">
-                Your private management link has also been queued for delivery, so you can recover it later.
+                Opt-in is complete. Your private settings link has also been queued for delivery.
             </div>
 
-            <h3>Private management link</h3>
-            <p>Keep this link private. It can pause email, change delivery limits, or revoke consent immediately.</p>
+            <h3>Private settings link</h3>
+            <p>Keep this link private. It can pause result email, choose a delivery setting, or permanently revoke consent.</p>
             <div class="secret-row">
                 <code class="secret-value secret-url"><?= h($managementUrl) ?></code>
                 <button class="sd2-action-btn neutral inline-action" type="button" data-copy="<?= h($managementUrl) ?>">Copy Link</button>
             </div>
-            <p><a class="sd2-action-btn primary inline-action" href="<?= h($managementUrl) ?>">Manage Consent</a></p>
+            <p><a class="sd2-action-btn primary inline-action" href="<?= h($managementUrl) ?>">Open Email Settings</a></p>
         <?php else: ?>
             <h2 id="confirmation-title">Confirmation unavailable</h2>
             <div class="consent-notice is-error" role="alert"><?= h($error) ?></div>

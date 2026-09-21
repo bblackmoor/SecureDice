@@ -61,6 +61,7 @@ $returnPath = preg_match('/^[a-f0-9]{32}$/', strtolower($resultId)) === 1
     <link rel="stylesheet" href="securedice.mobile.css">
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -73,12 +74,12 @@ $returnPath = preg_match('/^[a-f0-9]{32}$/', strtolower($resultId)) === 1
     </div>
 </header>
 
-<main>
+<main id="main-content" tabindex="-1">
     <section class="card consent-card" aria-labelledby="email-status-title">
         <?php if ($accepted): ?>
             <h2 id="email-status-title">Email request accepted</h2>
-            <div class="consent-notice is-success" role="status">If the submitted addresses are opted in and available, Secure Dice has queued the result for delivery.</div>
-            <p>The response deliberately does not identify which addresses are registered, paused, revoked, or rate-limited.</p>
+            <div class="consent-notice is-success" role="status">Secure Dice accepted the request and will deliver the result to eligible, opted-in addresses.</div>
+            <p>For recipient privacy, this page does not identify which addresses are registered, paused, revoked, or currently limited.</p>
         <?php else: ?>
             <h2 id="email-status-title">Email request unavailable</h2>
             <div class="consent-notice is-error" role="alert"><?= h($error) ?></div>

@@ -2,11 +2,11 @@
 
 :root {
     --sd2-text-font: "Roboto", sans-serif, ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial;
-    --sd2-text-size-xs: 9px;
-    --sd2-text-size-sm: 12px;
-    --sd2-text-size-md: 14px;
-    --sd2-text-size-lg: 16px;
-    --sd2-text-size-xl: 24px;
+    --sd2-text-size-xs: 12px;
+    --sd2-text-size-sm: 14px;
+    --sd2-text-size-md: 16px;
+    --sd2-text-size-lg: 18px;
+    --sd2-text-size-xl: 26px;
     --sd2-text-size-xxl: 36px;
 
     --sd2-text-weight-normal: 500;
@@ -16,7 +16,7 @@
 
     --sd2-color-black: #000000;
     --sd2-color-dark-grey: #37474f;
-    --sd2-color-medium-grey: #78909c;
+    --sd2-color-medium-grey: #52636b;
     --sd2-color-light-grey: #cfd8dc;
     --sd2-color-white: #ffffff;
     --sd2-color-dark-blue: #003399;
@@ -61,6 +61,44 @@ body {
     font-weight: var(--sd2-text-weight-normal);
     line-height: 1.5;
     color: var(--sd2-color-white);
+}
+
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid #ffbf47;
+    outline-offset: 3px;
+}
+
+.skip-link {
+    position: fixed;
+    top: var(--sd2-whitespace-sm);
+    left: var(--sd2-whitespace-sm);
+    z-index: 10000;
+    padding: var(--sd2-whitespace-sm) var(--sd2-whitespace-md);
+    border-radius: var(--sd2-box-radius);
+    background: var(--sd2-color-white);
+    color: var(--sd2-color-black);
+    font-weight: var(--sd2-text-weight-heavy);
+    transform: translateY(-160%);
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+.sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
 }
 
 /* Header / footer */
@@ -132,6 +170,7 @@ body {
 
 .site-footer {
     margin: var(--sd2-whitespace-lg) 0 0 0;
+    overflow-wrap: anywhere;
 }
 
 .site-footer p {
@@ -239,6 +278,15 @@ body {
     margin: 0;
 }
 
+.consent-actions form:first-child {
+    flex: 1 1 420px;
+}
+
+.consent-actions > .field-help {
+    flex: 1 1 100%;
+    margin: 0;
+}
+
 .email-result-card {
     max-width: 760px;
 }
@@ -255,7 +303,8 @@ body {
 /* Form elements */
 
 label {
-    margin: var(--sd2-whitespace-xs);
+    display: block;
+    margin: var(--sd2-whitespace-xs) 0;
     font-size: var(--sd2-text-size-md);
     font-weight: var(--sd2-text-weight-normal);
     color: rgba(11, 18, 32, 0.86);
@@ -265,6 +314,7 @@ select,
 input,
 button,
 textarea {
+    min-height: 44px;
     padding: var(--sd2-whitespace-sm);
     font-family: var(--sd2-text-font);
     font-size: var(--sd2-text-size-md);
@@ -274,7 +324,7 @@ select,
 input,
 textarea {
     width: 100%;
-    margin: var(--sd2-whitespace-xs);
+    margin: var(--sd2-whitespace-xs) 0;
     padding: var(--sd2-whitespace-sm);
     border: 2px solid rgba(15, 23, 42, 0.28);
     border-radius: var(--sd2-box-radius);
@@ -283,14 +333,6 @@ textarea {
     font-size: var(--sd2-text-size-md);
     color: var(--sd2-color-black);
     text-align: left;
-}
-
-select:focus,
-input:focus,
-button:focus,
-textarea:focus {
-    outline: 2px solid var(--sd2-color-highlight);
-    outline-offset: 2px;
 }
 
 select:disabled,
@@ -412,6 +454,11 @@ table {
 
 th {
     white-space: nowrap;
+}
+
+.preset-table td {
+    padding: var(--sd2-whitespace-xs) var(--sd2-whitespace-sm);
+    vertical-align: top;
 }
 
 /* Dice builder */
@@ -832,6 +879,22 @@ th {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-size: var(--sd2-text-size-sm);
     line-height: 1.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+
+    .sd2-action-btn:hover,
+    .sd2-action-btn:focus {
+        transform: none;
+    }
 }
 
 /* Floating actions */

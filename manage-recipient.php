@@ -69,6 +69,7 @@ http_response_code($statusCode);
     <script src="securedice.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <header class="site-header" role="banner">
     <div class="site-header-inner">
         <div class="site-title-wrap">
@@ -78,15 +79,15 @@ http_response_code($statusCode);
                 <span class="badge badge-primary">Consent Management</span>
             </div>
         </div>
-        <p class="site-subtitle">Choose an email frequency, pause delivery, or withdraw consent immediately.</p>
+        <p class="site-subtitle">Choose a delivery setting, pause result email, or permanently withdraw consent.</p>
     </div>
 </header>
 
-<main>
+<main id="main-content" tabindex="-1">
     <section class="card consent-card" aria-labelledby="management-title">
         <?php if ($revoked): ?>
             <h2 id="management-title">Consent revoked</h2>
-            <div class="consent-notice is-success" role="status">Your consent and this management link no longer work.</div>
+            <div class="consent-notice is-success" role="status">Your consent and private settings link have been revoked.</div>
             <p>You may opt in again later with a new confirmation.</p>
         <?php elseif (is_array($management)): ?>
             <h2 id="management-title">Manage consent</h2>
@@ -105,24 +106,26 @@ http_response_code($statusCode);
                     <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
                     <input type="hidden" name="token" value="<?= h($token) ?>">
                     <input type="hidden" name="action" value="frequency">
-                    <label for="delivery-mode">Result-email frequency</label>
-                    <select id="delivery-mode" name="delivery_mode">
-                        <option value="tabletop" <?= $management['delivery_mode'] === 'tabletop' ? 'selected' : '' ?>>Tabletop session — up to 150/hour, 1,000/day</option>
-                        <option value="occasional" <?= $management['delivery_mode'] === 'occasional' ? 'selected' : '' ?>>Occasional — up to 20/hour, 100/day</option>
-                        <option value="paused" <?= $management['delivery_mode'] === 'paused' ? 'selected' : '' ?>>Paused — no result email</option>
+                    <label for="delivery-mode">Delivery setting</label>
+                    <select id="delivery-mode" name="delivery_mode" required aria-describedby="delivery-mode-help">
+                        <option value="tabletop" <?= $management['delivery_mode'] === 'tabletop' ? 'selected' : '' ?>>Tabletop session — frequent play, up to 150 results/hour</option>
+                        <option value="occasional" <?= $management['delivery_mode'] === 'occasional' ? 'selected' : '' ?>>Occasional — up to 20 results/hour</option>
+                        <option value="paused" <?= $management['delivery_mode'] === 'paused' ? 'selected' : '' ?>>Paused — keep consent but send no results</option>
                     </select>
-                    <button class="sd2-action-btn primary inline-action" type="submit">Save Email Setting</button>
+                    <p id="delivery-mode-help" class="field-help">Tabletop allows 1,000 results/day; Occasional allows 100/day. Pausing is reversible.</p>
+                    <button class="sd2-action-btn primary inline-action" type="submit">Save Delivery Setting</button>
                 </form>
 
                 <form method="post" action="manage-recipient.php" onsubmit="return window.confirm('Revoke this address and stop all Secure Dice email?');">
                     <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
                     <input type="hidden" name="token" value="<?= h($token) ?>">
                     <input type="hidden" name="action" value="revoke">
-                    <button class="sd2-action-btn danger inline-action" type="submit">Revoke Consent</button>
+                    <button class="sd2-action-btn danger inline-action" type="submit" aria-describedby="revoke-help">Revoke Consent</button>
                 </form>
+                <p id="revoke-help" class="field-help">Revoking consent is permanent for this opt-in: it cancels pending result email and invalidates private links. You may opt in again later.</p>
             </div>
         <?php else: ?>
-            <h2 id="management-title">Management unavailable</h2>
+            <h2 id="management-title">Settings unavailable</h2>
             <div class="consent-notice is-error" role="alert"><?= h($error) ?></div>
             <p>The link may be invalid, replaced, or revoked.</p>
         <?php endif; ?>

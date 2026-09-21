@@ -3,7 +3,11 @@
 @media (max-width: 900px) {
     body {
         max-width: none;
-        padding: calc(40px + var(--sd2-whitespace-xs)) var(--sd2-whitespace-xs) var(--sd2-whitespace-xs);
+        padding: var(--sd2-whitespace-sm);
+    }
+
+    body:has(.floating-actions) {
+        padding-top: calc(54px + env(safe-area-inset-top));
     }
 
     select,
@@ -61,13 +65,13 @@
         gap: var(--sd2-whitespace-xs);
         width: auto;
         margin: 0;
-        padding: var(--sd2-whitespace-xs);
+        padding: calc(var(--sd2-whitespace-xs) + env(safe-area-inset-top)) var(--sd2-whitespace-xs) var(--sd2-whitespace-xs);
         background-color: var(--sd2-color-black);
         box-shadow: 0 var(--sd2-whitespace-xs) var(--sd2-whitespace-md) rgba(0, 0, 0, 0.35);
     }
 
     body:has(.floating-actions.has-four-actions) {
-        padding-top: calc(82px + var(--sd2-whitespace-xs));
+        padding-top: calc(104px + env(safe-area-inset-top));
     }
 
     .floating-actions.has-four-actions {
@@ -83,8 +87,9 @@
         min-width: 0;
         padding: var(--sd2-whitespace-sm);
         font-size: var(--sd2-text-size-sm);
-        line-height: 1.05;
-        white-space: nowrap;
+        min-height: 44px;
+        line-height: 1.2;
+        white-space: normal;
     }
 
     .sd2-action-btn:hover,
@@ -174,5 +179,27 @@
     .consent-actions form,
     .consent-actions .sd2-action-btn {
         width: 100%;
+    }
+
+    .preset-table,
+    .preset-table tbody,
+    .preset-table tr,
+    .preset-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .preset-table tr {
+        padding: var(--sd2-whitespace-sm) 0;
+        border-top: 1px solid var(--sd2-color-light-grey);
+    }
+
+    .preset-table td {
+        padding: var(--sd2-whitespace-xs) 0;
+    }
+
+    .email-result-form textarea,
+    .json {
+        min-height: 12rem;
     }
 }

@@ -79,10 +79,10 @@ An address must confirm its opt-in once before Secure Dice will send results to 
 
 1. The recipient follows **Opt in to result email or manage consent** and submits an address on `recipient.php`.
 2. Secure Dice stores the address encrypted and emails a single-use confirmation link that expires after 24 hours.
-3. Confirmation activates the address and provides a private management link. No permanent recipient code is required.
+3. Confirmation activates the address and provides a private settings link. No code needs to be shared with a roller.
 4. A roller enters up to 10 addresses on a stored result page. Secure Dice silently queues only active, available recipients and gives the roller a generic response.
 5. Result email includes readable roll arithmetic, the authoritative verification link, aggregate recipient counts, and a per-message unsubscribe link.
-6. The management link can select **Tabletop session**, **Occasional**, or **Paused** delivery, or revoke consent immediately. Submitting an active address on the opt-in form emails a replacement management link.
+6. The private settings link can select **Tabletop session**, **Occasional**, or **Paused** delivery, or revoke consent immediately. Submitting an active address on the opt-in form emails a one-time recovery link for replacing the private settings link.
 
 No custom subject, sender identity, or message text is accepted. Non-opted-in addresses receive nothing. Delivered messages report only aggregate counts—for example, that eight of ten intended recipients were opted in—without naming or listing another recipient.
 
@@ -117,6 +117,8 @@ https://www.rpglibrary.org/software/securedice/securedice.php?aq=7&as=4&dt=5&ad=
 ```
 
 ## Installation
+
+For a production installation, including DreamHost setup, first-run testing, cron, backups, upgrades, rollback, and lost-secret recovery, follow [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Place the repository files in a PHP-enabled web directory and direct users to `securedice.php`. The included `.htaccess` makes `securedice.php` the default page on Apache and redirects explicit requests for `index.php`.
 
@@ -202,10 +204,10 @@ Upload a release ZIP or source checkout beneath the domain, but keep `.securedic
 Create the queue worker in DreamHost's **Cron Jobs** panel, select the website's Shell user, enable locking, and run it every minute. Replace the username and installation path in this command:
 
 ```text
-/usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/software/securedice/bin/process-email-queue.php --limit=100
+/usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/software/securedice/bin/process-email-queue.php --limit=100 --quiet
 ```
 
-The worker produces a short status line on every run. Direct cron output to an administrative address while initially testing the deployment; redirect routine output after delivery is proven if a message every minute is undesirable.
+Omit `--quiet` while initially testing so the worker prints a short status line. In scheduled operation, `--quiet` suppresses routine success output while errors still reach standard error and the PHP error log.
 
 Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, and a SHA-256 integrity digest. They are insert-only; a database trigger prevents an existing result from being changed. Database files and SQLite sidecar files are restricted to the PHP process owner when the host permits permission changes.
 
@@ -218,6 +220,7 @@ php tests/consent-test.php
 php tests/email-test.php
 php tests/storage-migration-test.php
 php tests/config-test.php
+php tests/ui-test.php
 ```
 
 ## Versioning
