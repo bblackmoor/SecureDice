@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
+require_once __DIR__ . '/storage.php';
 
 $useGetPresets = empty($_POST);
 
@@ -304,7 +305,7 @@ try {
 
     session_start();
 
-    $_SESSION['last_roll'] = [
+    $_SESSION['last_roll'] = store_result_record([
         'schema_version' => 2,
         'generated_at' => gmdate(DATE_ATOM),
         'specification' => [
@@ -334,7 +335,7 @@ try {
         ],
         'summary' => $summary,
         'sets' => $sets,
-    ];
+    ]);
 
     header('Location: results.php');
     exit;

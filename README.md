@@ -11,6 +11,7 @@ Secure Dice is a free, account-free online dice roller for tabletop roleplaying 
 - **Predictable URLs:** Copy or bookmark a URL that restores the complete roll setup.
 - **Readable results:** Results show individual dice, dropped and special dice, modifiers, arithmetic, final totals, and summary statistics.
 - **Portable records:** Copy the canonical result data as JSON together with its MD5 hash.
+- **Immutable records:** Every completed roll is stored under a random 128-bit result ID for server-backed verification work.
 
 Secure Dice is available at [RPG Library](https://www.rpglibrary.org/software/securedice/).
 
@@ -93,11 +94,26 @@ Place the repository files in a PHP-enabled web directory and direct users to `s
 
 Secure Dice requires:
 
-- PHP with `random_int()` and session support.
+- PHP with `random_int()`, session support, PDO, and the PDO SQLite driver.
 - A web server capable of running PHP.
 - Browser cookies for the short-lived session that transfers a roll to its results page.
+- A writable directory for the SQLite result database.
 
-No database or account system is required.
+Secure Dice automatically creates `data/securedice.sqlite`. Apache access to the bundled `data` directory is denied by its `.htaccess` file. For production, placing the database outside the public web directory is strongly recommended:
+
+```text
+SECUREDICE_DB_PATH=/absolute/private/path/securedice.sqlite
+```
+
+The configured directory must already exist and be writable by PHP. Secure Dice does not require a separate database server or user accounts.
+
+Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, and a SHA-256 integrity digest. They are insert-only; a database trigger prevents an existing result from being changed. The public verification workflow will be added separately.
+
+To run the storage test:
+
+```shell
+php tests/storage-test.php
+```
 
 ## Versioning
 
