@@ -2,3 +2,4 @@ _old
 /data/*
 !/data/.htaccess
 /vendor/
+.securedice.env

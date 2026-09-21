@@ -128,7 +128,22 @@ Secure Dice requires:
 - Browser cookies for the short-lived session that transfers a roll to its results page.
 - A writable directory for the SQLite result database.
 
-Secure Dice automatically creates `data/securedice.sqlite`. Apache access to the bundled `data` directory is denied by its `.htaccess` file. For production, placing the database outside the public web directory is strongly recommended:
+Secure Dice automatically creates `data/securedice.sqlite`. Apache access to the bundled `data` directory is denied by its `.htaccess` file. For production, placing the database outside the public web directory is strongly recommended.
+
+### Private configuration
+
+The repository includes `.securedice.env.example`, a documented template containing every supported setting. Copy it to `.securedice.env` in the hosting user's home directory, edit the private copy, and restrict it to the account owner:
+
+```shell
+cp .securedice.env.example "$HOME/.securedice.env"
+chmod 600 "$HOME/.securedice.env"
+```
+
+The completed file must remain outside the public website and must never be committed. Secure Dice automatically reads `$HOME/.securedice.env` for both web requests and the command-line queue worker. Existing process environment variables take precedence over values in the file. A different location can be selected with `SECUREDICE_CONFIG_PATH`, but that variable must be available to both PHP execution environments.
+
+The parser accepts only documented `SECUREDICE_` keys, rejects duplicates and malformed values, and refuses a Unix configuration file readable or writable by group or other users. Blank lines and lines beginning with `#` are ignored. Values may be unquoted, single quoted, or double quoted as documented in the example.
+
+The private configuration should place the database outside the website:
 
 ```text
 SECUREDICE_DB_PATH=/absolute/private/path/securedice.sqlite
@@ -136,7 +151,7 @@ SECUREDICE_DB_PATH=/absolute/private/path/securedice.sqlite
 
 The configured directory must already exist and be writable by PHP. Secure Dice does not require a separate database server or user accounts.
 
-Recipient consent also requires a persistent 256-bit application secret, supplied as exactly 64 hexadecimal characters. Generate it once and store it in the deployment's secret manager or environment configuration:
+Recipient consent also requires a persistent 256-bit application secret, supplied as exactly 64 hexadecimal characters. Generate it once and store it in the private configuration:
 
 ```shell
 php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
@@ -154,7 +169,7 @@ Install PHPMailer when deploying directly from a source checkout:
 composer install --no-dev --optimize-autoloader
 ```
 
-Configure the public application URL and authenticated SMTP transport:
+Configure the public application URL and authenticated SMTP transport in the private file:
 
 ```text
 SECUREDICE_BASE_URL=https://www.example.com/securedice
@@ -178,6 +193,20 @@ Run the queue worker every minute with cron. It is safe to run multiple workers 
 
 The worker logs operational details to the PHP error log without returning SMTP errors, addresses, passwords, or private tokens to site visitors.
 
+### DreamHost Shared Hosting
+
+The example configuration is prefilled with DreamHost's non-secret SMTP settings. Create a dedicated address such as `securedice@rpglibrary.org` in **Manage Email**, then enter that full address and its mailbox password in the private configuration. DreamHost SMTP uses `smtp.dreamhost.com`, port `587`, and `starttls`; the authenticated username and From address should be the mailbox address.
+
+Upload a release ZIP or source checkout beneath the domain, but keep `.securedice.env` and the SQLite data directory directly under `/home/YOUR_DREAMHOST_USER/` rather than under `rpglibrary.org/`. The template's opening comment contains the corresponding copy, permission, directory, and secret-generation commands.
+
+Create the queue worker in DreamHost's **Cron Jobs** panel, select the website's Shell user, enable locking, and run it every minute. Replace the username and installation path in this command:
+
+```text
+/usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/software/securedice/bin/process-email-queue.php --limit=100
+```
+
+The worker produces a short status line on every run. Direct cron output to an administrative address while initially testing the deployment; redirect routine output after delivery is proven if a message every minute is undesirable.
+
 Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, and a SHA-256 integrity digest. They are insert-only; a database trigger prevents an existing result from being changed. Database files and SQLite sidecar files are restricted to the PHP process owner when the host permits permission changes.
 
 To run the storage, verification, consent, and email tests:
@@ -188,6 +217,7 @@ php tests/verification-test.php
 php tests/consent-test.php
 php tests/email-test.php
 php tests/storage-migration-test.php
+php tests/config-test.php
 ```
 
 ## Versioning
