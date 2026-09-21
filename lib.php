@@ -13,6 +13,43 @@ function h(string $s): string
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
+/** Start the application's strict, cookie-only session. */
+function app_start_session(): void
+{
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        return;
+    }
+
+    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ((string) ($_SERVER['SERVER_PORT'] ?? '') === '443');
+
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
+    session_name('securedice');
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => $secure,
+        'httponly' => true,
+        'samesite' => 'Strict',
+    ]);
+    session_start();
+}
+
+/** Send browser defenses shared by every web entry point. */
+function send_security_headers(): void
+{
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    header(
+        "Content-Security-Policy: default-src 'self'; "
+        . "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; "
+        . "object-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'"
+    );
+}
+
 function app_version(): string
 {
     static $version = null;

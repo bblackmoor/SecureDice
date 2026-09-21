@@ -526,6 +526,14 @@
         wireDiceUi();
         wireFloatingActions();
         wireResultsCopyButtons();
+
+        Array.prototype.forEach.call(document.querySelectorAll("form[data-confirm]"), function (form) {
+            form.addEventListener("submit", function (event) {
+                if (!window.confirm(String(form.getAttribute("data-confirm") || "Continue?"))) {
+                    event.preventDefault();
+                }
+            });
+        });
     }
 
     document.addEventListener("DOMContentLoaded", init);

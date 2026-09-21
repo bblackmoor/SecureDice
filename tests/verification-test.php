@@ -8,6 +8,7 @@ $databasePath = sys_get_temp_dir()
     . '.sqlite';
 
 putenv('SECUREDICE_DB_PATH=' . $databasePath);
+putenv('SECUREDICE_SECRET=' . str_repeat('32', 32));
 
 require_once dirname(__DIR__) . '/storage.php';
 
@@ -18,7 +19,7 @@ function verification_test_assert(bool $condition, string $message): void
     }
 }
 
-function insert_verification_test_record(array $result, string $digest): void
+function insert_verification_test_record(array $result, string $digest, ?string $hmac = null): void
 {
     $canonicalJson = encode_canonical_result($result);
     $statement = result_storage_connection()->prepare(
@@ -28,8 +29,9 @@ function insert_verification_test_record(array $result, string $digest): void
             generated_at,
             canonical_json,
             content_sha256,
+            auth_hmac_sha256,
             stored_at
-        ) VALUES (?, ?, ?, ?, ?, ?)'
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
     $statement->execute([
         $result['result_id'],
@@ -37,6 +39,7 @@ function insert_verification_test_record(array $result, string $digest): void
         $result['generated_at'],
         $canonicalJson,
         $digest,
+        $hmac ?? result_authentication_hmac($canonicalJson),
         '2026-09-21T12:00:01+00:00',
     ]);
 }
@@ -123,6 +126,29 @@ try {
     }
 
     verification_test_assert($corruptionWasDetected, 'A corrupt result passed verification.');
+
+    $forged = $stored;
+    $forged['result_id'] = str_repeat('a', 32);
+    $forged['sets'][0]['total'] = 6;
+    $forgedJson = encode_canonical_result($forged);
+    insert_verification_test_record(
+        $forged,
+        hash('sha256', $forgedJson),
+        str_repeat('0', 64)
+    );
+
+    $forgeryWasDetected = false;
+
+    try {
+        load_result_record($forged['result_id']);
+    } catch (ResultIntegrityException $e) {
+        $forgeryWasDetected = true;
+    }
+
+    verification_test_assert(
+        $forgeryWasDetected,
+        'A forged result with a recomputed public digest passed authentication.'
+    );
 
     $unsupported = $stored;
     $unsupported['result_id'] = str_repeat('c', 32);

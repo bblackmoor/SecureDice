@@ -8,9 +8,7 @@ require_once __DIR__ . '/results-functions.php';
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/consent.php';
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+app_start_session();
 
 if (!isset($data, $canonicalJson, $resultViewMode) || !is_array($data)) {
     throw new RuntimeException('Result view data was not provided.');

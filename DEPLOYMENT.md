@@ -173,7 +173,7 @@ If `SECUREDICE_SECRET` is lost or changed accidentally:
 2. Restore `.securedice.env` and the SQLite database from the same known-good backup set.
 3. Run the worker manually and test one existing private settings link.
 
-Existing encrypted recipient addresses cannot be recovered without the original secret. Do not silently generate a replacement for an existing database. Stored dice results do not use this secret, but the consent records and keyed rate-limit identifiers do.
+Existing encrypted recipient addresses cannot be recovered without the original secret, and stored dice results cannot pass their server-authentication check. Do not silently generate a replacement for an existing database. The same secret authenticates results and protects consent records and keyed rate-limit identifiers.
 
 ## Release acceptance checklist
 

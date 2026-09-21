@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/storage.php';
 
 class ConsentConfigurationException extends RuntimeException
@@ -23,32 +24,17 @@ class RecipientNotActiveException extends RuntimeException
 /** Return the required 256-bit application secret. */
 function consent_secret_bytes(): string
 {
-    static $secret = null;
-
-    if (is_string($secret)) {
-        return $secret;
-    }
-
     if (!function_exists('sodium_crypto_secretbox')) {
         error_log('Secure Dice consent storage requires the Sodium extension.');
         throw new ConsentConfigurationException('Recipient consent is temporarily unavailable.');
     }
 
-    $configured = getenv('SECUREDICE_SECRET');
-    $configured = is_string($configured) ? trim($configured) : '';
-
-    if (preg_match('/^[a-f0-9]{64}$/i', $configured) !== 1) {
-        error_log('SECUREDICE_SECRET must contain exactly 64 hexadecimal characters.');
+    try {
+        return securedice_secret_bytes();
+    } catch (SecureDiceConfigurationException $e) {
+        error_log($e->getMessage());
         throw new ConsentConfigurationException('Recipient consent is temporarily unavailable.');
     }
-
-    $decoded = hex2bin($configured);
-
-    if (!is_string($decoded) || strlen($decoded) !== 32) {
-        throw new ConsentConfigurationException('Recipient consent is temporarily unavailable.');
-    }
-
-    return $secret = $decoded;
 }
 
 function consent_base64url_encode(string $value): string
@@ -182,22 +168,7 @@ function mask_recipient_email(string $email): string
 /** Start a private, CSRF-protected session for consent forms. */
 function consent_start_session(): void
 {
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        return;
-    }
-
-    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || ((string) ($_SERVER['SERVER_PORT'] ?? '') === '443');
-
-    session_name('securedice_consent');
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'secure' => $secure,
-        'httponly' => true,
-        'samesite' => 'Strict',
-    ]);
-    session_start();
+    app_start_session();
 }
 
 function consent_csrf_token(): string

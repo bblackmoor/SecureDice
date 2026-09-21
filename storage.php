@@ -102,7 +102,7 @@ function initialize_result_storage(PDO $connection): void
 {
     $storageSchemaVersion = (int) $connection->query('PRAGMA user_version')->fetchColumn();
 
-    if ($storageSchemaVersion > 4) {
+    if ($storageSchemaVersion > 5) {
         throw new RuntimeException('The result database uses a newer schema.');
     }
 
@@ -401,6 +401,55 @@ function initialize_result_storage(PDO $connection): void
             $connection->exec('PRAGMA user_version = 4');
         }
 
+        if ($storageSchemaVersion < 5) {
+            $connection->exec(
+                'ALTER TABLE result_records ADD COLUMN auth_hmac_sha256 TEXT'
+            );
+            $connection->exec('DROP TRIGGER IF EXISTS result_records_prevent_update');
+
+            $records = $connection->query(
+                'SELECT public_id, canonical_json FROM result_records'
+            );
+            $authenticate = $connection->prepare(
+                'UPDATE result_records SET auth_hmac_sha256 = :hmac WHERE public_id = :public_id'
+            );
+
+            foreach ($records as $record) {
+                $authenticate->execute([
+                    ':hmac' => result_authentication_hmac((string) $record['canonical_json']),
+                    ':public_id' => (string) $record['public_id'],
+                ]);
+            }
+
+            $connection->exec(
+                "CREATE TRIGGER result_records_prevent_update
+                BEFORE UPDATE ON result_records
+                BEGIN
+                    SELECT RAISE(ABORT, 'result records are immutable');
+                END"
+            );
+
+            $connection->exec(
+                'CREATE TABLE result_delivery_claims (
+                    recipient_id INTEGER NOT NULL,
+                    result_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (recipient_id, result_id),
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE,
+                    FOREIGN KEY (result_id) REFERENCES result_records(public_id)
+                ) WITHOUT ROWID'
+            );
+            $connection->exec(
+                "INSERT OR IGNORE INTO result_delivery_claims (recipient_id, result_id, created_at)
+                SELECT recipient_id, result_id, MIN(created_at)
+                FROM outbound_messages
+                WHERE message_type = 'result_delivery' AND result_id IS NOT NULL
+                GROUP BY recipient_id, result_id"
+            );
+
+            $connection->exec('PRAGMA user_version = 5');
+        }
+
         $connection->commit();
     } catch (Throwable $e) {
         if ($connection->inTransaction()) {
@@ -458,6 +507,16 @@ function encode_canonical_result(array $result): string
     }
 }
 
+/** Authenticate canonical result bytes with a server-only, domain-separated key. */
+function result_authentication_hmac(string $canonicalJson): string
+{
+    return hash_hmac(
+        'sha256',
+        "Secure Dice stored result v1\0" . $canonicalJson,
+        securedice_secret_bytes()
+    );
+}
+
 /**
  * Persist one result and return the result augmented with its public ID.
  *
@@ -473,6 +532,7 @@ function store_result_record(array $result): array
     $result['result_id'] = bin2hex(random_bytes(16));
     $canonicalJson = encode_canonical_result($result);
     $contentSha256 = hash('sha256', $canonicalJson);
+    $authenticationHmac = result_authentication_hmac($canonicalJson);
     $generatedAt = (string) ($result['generated_at'] ?? '');
     $schemaVersion = (int) ($result['schema_version'] ?? 0);
 
@@ -488,6 +548,7 @@ function store_result_record(array $result): array
                 generated_at,
                 canonical_json,
                 content_sha256,
+                auth_hmac_sha256,
                 stored_at
             ) VALUES (
                 :public_id,
@@ -495,6 +556,7 @@ function store_result_record(array $result): array
                 :generated_at,
                 :canonical_json,
                 :content_sha256,
+                :auth_hmac_sha256,
                 :stored_at
             )'
         );
@@ -505,6 +567,7 @@ function store_result_record(array $result): array
             ':generated_at' => $generatedAt,
             ':canonical_json' => $canonicalJson,
             ':content_sha256' => $contentSha256,
+            ':auth_hmac_sha256' => $authenticationHmac,
             ':stored_at' => gmdate(DATE_ATOM),
         ]);
 
@@ -624,6 +687,7 @@ function load_result_record(string $publicId): ?array
                 generated_at,
                 canonical_json,
                 content_sha256,
+                auth_hmac_sha256,
                 stored_at
             FROM result_records
             WHERE public_id = :public_id'
@@ -642,10 +706,14 @@ function load_result_record(string $publicId): ?array
     $canonicalJson = (string) ($record['canonical_json'] ?? '');
     $storedDigest = (string) ($record['content_sha256'] ?? '');
     $calculatedDigest = hash('sha256', $canonicalJson);
+    $storedHmac = (string) ($record['auth_hmac_sha256'] ?? '');
+    $calculatedHmac = result_authentication_hmac($canonicalJson);
 
     if (
         strlen($storedDigest) !== 64
         || !hash_equals($storedDigest, $calculatedDigest)
+        || strlen($storedHmac) !== 64
+        || !hash_equals($storedHmac, $calculatedHmac)
     ) {
         throw new ResultIntegrityException('The stored result failed its integrity check.');
     }

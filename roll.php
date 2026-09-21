@@ -6,6 +6,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/storage.php';
 
+send_security_headers();
+
 $useGetPresets = empty($_POST);
 
 $allowedDiceCountsRow1 = range(1, 20);
@@ -303,7 +305,7 @@ try {
     $dieA = parse_die_type($dieTypeRawA);
     $dieB = parse_die_type($dieTypeRawB);
 
-    session_start();
+    app_start_session();
 
     $_SESSION['last_roll'] = store_result_record([
         'schema_version' => 2,

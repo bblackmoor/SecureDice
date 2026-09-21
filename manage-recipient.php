@@ -8,6 +8,7 @@ require_once __DIR__ . '/consent.php';
 header('Cache-Control: private, no-store');
 header('X-Robots-Tag: noindex, nofollow');
 header('Referrer-Policy: no-referrer');
+send_security_headers();
 consent_start_session();
 
 $token = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));
@@ -116,7 +117,7 @@ http_response_code($statusCode);
                     <button class="sd2-action-btn primary inline-action" type="submit">Save Delivery Setting</button>
                 </form>
 
-                <form method="post" action="manage-recipient.php" onsubmit="return window.confirm('Revoke this address and stop all Secure Dice email?');">
+                <form method="post" action="manage-recipient.php" data-confirm="Revoke this address and stop all Secure Dice email?">
                     <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
                     <input type="hidden" name="token" value="<?= h($token) ?>">
                     <input type="hidden" name="action" value="revoke">

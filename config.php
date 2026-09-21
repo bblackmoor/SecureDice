@@ -6,6 +6,33 @@ class SecureDiceConfigurationException extends RuntimeException
 {
 }
 
+/** Return the application's persistent 256-bit secret. */
+function securedice_secret_bytes(): string
+{
+    static $secret = null;
+
+    if (is_string($secret)) {
+        return $secret;
+    }
+
+    $configured = getenv('SECUREDICE_SECRET');
+    $configured = is_string($configured) ? trim($configured) : '';
+
+    if (preg_match('/^[a-f0-9]{64}$/i', $configured) !== 1) {
+        throw new SecureDiceConfigurationException(
+            'SECUREDICE_SECRET must contain exactly 64 hexadecimal characters.'
+        );
+    }
+
+    $decoded = hex2bin($configured);
+
+    if (!is_string($decoded) || strlen($decoded) !== 32) {
+        throw new SecureDiceConfigurationException('SECUREDICE_SECRET is invalid.');
+    }
+
+    return $secret = $decoded;
+}
+
 /** Configuration keys accepted from the private Secure Dice environment file. */
 function securedice_configuration_keys(): array
 {

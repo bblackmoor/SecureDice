@@ -5,6 +5,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
 
+send_security_headers();
+
 function signed_label(int $n): string
 {
     $sign = ($n >= 0) ? '+' : '−';

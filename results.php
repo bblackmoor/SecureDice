@@ -3,9 +3,11 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/storage.php';
 
-session_start();
+send_security_headers();
+app_start_session();
 
 $data = $_SESSION['last_roll'] ?? null;
 

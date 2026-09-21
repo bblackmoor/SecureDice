@@ -163,10 +163,38 @@ try {
         'Sensitive queue payloads were not purged after delivery.'
     );
 
+    $firstRecipientId = (int) $connection->query(
+        'SELECT id FROM recipients ORDER BY id LIMIT 1'
+    )->fetchColumn();
+    $recipientBuckets = [];
+
+    foreach (recipient_delivery_limits('tabletop') as [$context]) {
+        $recipientBuckets[] = consent_fingerprint(
+            'rate-limit:' . $context,
+            (string) $firstRecipientId
+        );
+    }
+
+    $placeholders = implode(',', array_fill(0, count($recipientBuckets), '?'));
+    $recipientAttempts = $connection->prepare(
+        "SELECT COALESCE(SUM(attempts), 0) FROM rate_limits WHERE bucket_key IN ({$placeholders})"
+    );
+    $recipientAttempts->execute($recipientBuckets);
+    $attemptsBeforeReplay = (int) $recipientAttempts->fetchColumn();
+
     request_result_email($result['result_id'], $addresses[0], '192.0.2.20');
     email_test_assert(
         (int) $connection->query("SELECT COUNT(*) FROM outbound_messages WHERE message_type = 'result_delivery'")->fetchColumn() === 8,
         'The same result was queued twice inside the duplicate-suppression window.'
+    );
+    $recipientAttempts->execute($recipientBuckets);
+    email_test_assert(
+        (int) $recipientAttempts->fetchColumn() === $attemptsBeforeReplay,
+        'A replay consumed the recipient delivery allowance.'
+    );
+    email_test_assert(
+        (int) $connection->query('SELECT COUNT(*) FROM result_delivery_claims')->fetchColumn() === 8,
+        'Permanent recipient-result replay claims were not retained.'
     );
 
     $resultTwo = store_result_record(email_test_result_payload(5));

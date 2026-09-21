@@ -67,9 +67,9 @@ The results page also provides:
 
 ## Result Verification
 
-Each roll is stored as an immutable canonical record before its results page is displayed. To verify a roll, open its verification link or enter its 32-character result ID on `verify.php`. Secure Dice retrieves its authoritative database copy, confirms its internal SHA-256 integrity digest, validates the record structure, and then renders the stored result.
+Each roll is stored as an immutable canonical record before its results page is displayed. To verify a roll, open its verification link or enter its 32-character result ID on `verify.php`. Secure Dice retrieves its authoritative database copy, verifies its server-secret HMAC and SHA-256 corruption check, validates the record structure, and then renders the stored result.
 
-Successful verification establishes that the result is the record retained by that Secure Dice server. The SHA-256 digest is an internal corruption check; it is not presented as a standalone signature or as proof independent of the server and its HTTPS identity.
+Successful verification establishes that the result was authenticated by that Secure Dice installation and remains unchanged. The HMAC is not a public-key signature or proof independent of the server, its secret, and its HTTPS identity. See [SECURITY.md](SECURITY.md) for the threat model and residual risks.
 
 Verification links do not depend on the browser session that generated the roll. Verified canonical JSON can also be downloaded from the verification page.
 
@@ -78,7 +78,7 @@ Verification links do not depend on the browser session that generated the roll.
 An address must confirm its opt-in once before Secure Dice will send results to it:
 
 1. The recipient follows **Opt in to result email or manage consent** and submits an address on `recipient.php`.
-2. Secure Dice stores the address encrypted and emails a single-use confirmation link that expires after 24 hours.
+2. Secure Dice stores the address encrypted and emails a single-use confirmation link that expires after 24 hours. Opening it presents a confirmation button; only that CSRF-protected action activates delivery.
 3. Confirmation activates the address and provides a private settings link. No code needs to be shared with a roller.
 4. A roller enters up to 10 addresses on a stored result page. Secure Dice silently queues only active, available recipients and gives the roller a generic response.
 5. Result email includes readable roll arithmetic, the authoritative verification link, aggregate recipient counts, and a per-message unsubscribe link.
@@ -86,9 +86,9 @@ An address must confirm its opt-in once before Secure Dice will send results to 
 
 No custom subject, sender identity, or message text is accepted. Non-opted-in addresses receive nothing. Delivered messages report only aggregate counts—for example, that eight of ten intended recipients were opted in—without naming or listing another recipient.
 
-Enrollment and result-request responses are deliberately generic. Raw addresses and IP addresses are not retained for lookup or rate limiting: addresses are encrypted with keyed fingerprints, and rate buckets use keyed hashes. Consent and email forms use CSRF protection, private no-store responses, and same-site cookies.
+Enrollment and result-request responses are deliberately generic. Raw addresses and IP addresses are not retained for lookup or rate limiting: addresses are encrypted with keyed fingerprints, and rate buckets use keyed hashes. Consent and email forms use CSRF protection, private no-store responses, strict same-site cookies, and a restrictive browser security policy.
 
-Tabletop delivery permits 20 results per 10 minutes, 150 per hour, and 1,000 per day per recipient. Occasional delivery permits 10 per 10 minutes, 20 per hour, and 100 per day. Sender IPs are limited to 300 submissions per hour, mixed opted-in/non-opted-in groups receive separate throttling, duplicate result-recipient pairs are suppressed for 60 seconds, and SMTP output is capped at 60 messages per minute and 500 per hour. Nearby results for the same recipient are held briefly and combined, up to 20 results per message.
+Tabletop delivery permits 20 results per 10 minutes, 150 per hour, and 1,000 per day per recipient. Occasional delivery permits 10 per 10 minutes, 20 per hour, and 100 per day. Sender IPs are limited to 300 submissions per hour, mixed opted-in/non-opted-in groups receive separate throttling, each result-recipient pair can be delivered only once, and SMTP output is capped at 60 messages per minute and 500 per hour. Replays do not consume recipient delivery limits. Nearby results for the same recipient are held briefly and combined, up to 20 results per message.
 
 The command-line queue worker atomically claims messages, rechecks consent before sending, retries temporary failures with increasing delays, stops after five attempts, records sanitized delivery history, and purges encrypted message payloads after success or permanent failure.
 
@@ -153,7 +153,7 @@ SECUREDICE_DB_PATH=/absolute/private/path/securedice.sqlite
 
 The configured directory must already exist and be writable by PHP. Secure Dice does not require a separate database server or user accounts.
 
-Recipient consent also requires a persistent 256-bit application secret, supplied as exactly 64 hexadecimal characters. Generate it once and store it in the private configuration:
+Result authentication and recipient consent require a persistent 256-bit application secret, supplied as exactly 64 hexadecimal characters. Generate it once and store it in the private configuration:
 
 ```shell
 php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
@@ -163,7 +163,7 @@ php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
 SECUREDICE_SECRET=<64 hexadecimal characters>
 ```
 
-Never commit this value. Back it up as carefully as the database and do not rotate it casually: it keys address encryption, private fingerprints, and rate-limit buckets, so replacing it makes existing encrypted recipient records unusable. The result-verification feature does not require this secret.
+Never commit this value. Back it up as carefully as the database and do not rotate it casually: it authenticates stored results and keys address encryption, private fingerprints, and rate-limit buckets. Replacing it makes existing results fail authentication and existing encrypted recipient records unreadable.
 
 Install PHPMailer when deploying directly from a source checkout:
 
@@ -209,7 +209,7 @@ Create the queue worker in DreamHost's **Cron Jobs** panel, select the website's
 
 Omit `--quiet` while initially testing so the worker prints a short status line. In scheduled operation, `--quiet` suppresses routine success output while errors still reach standard error and the PHP error log.
 
-Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, and a SHA-256 integrity digest. They are insert-only; a database trigger prevents an existing result from being changed. Database files and SQLite sidecar files are restricted to the PHP process owner when the host permits permission changes.
+Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, a SHA-256 corruption check, and a server-secret HMAC. They are insert-only; a database trigger prevents an existing result from being changed. Database files and SQLite sidecar files are restricted to the PHP process owner when the host permits permission changes.
 
 To run the storage, verification, consent, and email tests:
 
@@ -221,6 +221,7 @@ php tests/email-test.php
 php tests/storage-migration-test.php
 php tests/config-test.php
 php tests/ui-test.php
+php tests/security-test.php
 ```
 
 ## Versioning

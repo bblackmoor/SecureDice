@@ -8,6 +8,7 @@ require_once __DIR__ . '/consent.php';
 header('Cache-Control: private, no-store');
 header('X-Robots-Tag: noindex, nofollow');
 header('Referrer-Policy: no-referrer');
+send_security_headers();
 consent_start_session();
 
 $token = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));

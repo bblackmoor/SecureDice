@@ -8,10 +8,9 @@ require_once __DIR__ . '/email.php';
 header('Cache-Control: private, no-store');
 header('X-Robots-Tag: noindex, nofollow');
 header('Referrer-Policy: no-referrer');
+send_security_headers();
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+app_start_session();
 
 $accepted = false;
 $error = '';

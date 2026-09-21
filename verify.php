@@ -6,6 +6,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/storage.php';
 
+send_security_headers();
 header('Cache-Control: private, no-store');
 header('X-Robots-Tag: noindex, nofollow');
 header('Referrer-Policy: no-referrer');

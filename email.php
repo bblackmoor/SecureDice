@@ -202,43 +202,51 @@ function request_result_email(string $resultId, string $submittedRecipients, str
         $eligible = [];
     }
 
+    $normalizedResultId = strtolower(trim($resultId));
     $now = consent_timestamp();
-    $queue = [];
-    $duplicateAfter = consent_timestamp(time() - 60);
-
-    foreach ($eligible as $recipient) {
-        $recipientId = (int) $recipient['id'];
-
-        if (!recipient_delivery_available($recipientId, (string) $recipient['delivery_mode'])) {
-            continue;
-        }
-
-        $duplicate = $connection->prepare(
-            "SELECT 1 FROM outbound_messages
-            WHERE recipient_id = :recipient_id AND result_id = :result_id
-                AND created_at >= :duplicate_after
-                AND status IN ('pending', 'sending', 'sent') LIMIT 1"
-        );
-        $duplicate->execute([
-            ':recipient_id' => $recipientId,
-            ':result_id' => strtolower(trim($resultId)),
-            ':duplicate_after' => $duplicateAfter,
-        ]);
-
-        if ($duplicate->fetchColumn() !== false) {
-            continue;
-        }
-
-        $queue[] = [
-            'recipient_id' => $recipientId,
-            'email' => consent_decrypt_string((string) $recipient['email_ciphertext']),
-        ];
-    }
-
     $publicId = bin2hex(random_bytes(16));
     $connection->beginTransaction();
 
     try {
+        $queue = [];
+        $claim = $connection->prepare(
+            'INSERT OR IGNORE INTO result_delivery_claims
+            (recipient_id, result_id, created_at)
+            VALUES (:recipient_id, :result_id, :created_at)'
+        );
+        $releaseClaim = $connection->prepare(
+            'DELETE FROM result_delivery_claims
+            WHERE recipient_id = :recipient_id AND result_id = :result_id'
+        );
+
+        foreach ($eligible as $recipient) {
+            $recipientId = (int) $recipient['id'];
+            $claim->execute([
+                ':recipient_id' => $recipientId,
+                ':result_id' => $normalizedResultId,
+                ':created_at' => $now,
+            ]);
+
+            // A recipient-result pair is deliverable once. Replays neither
+            // enqueue mail nor consume the recipient's delivery allowance.
+            if ($claim->rowCount() !== 1) {
+                continue;
+            }
+
+            if (!recipient_delivery_available($recipientId, (string) $recipient['delivery_mode'])) {
+                $releaseClaim->execute([
+                    ':recipient_id' => $recipientId,
+                    ':result_id' => $normalizedResultId,
+                ]);
+                continue;
+            }
+
+            $queue[] = [
+                'recipient_id' => $recipientId,
+                'email' => consent_decrypt_string((string) $recipient['email_ciphertext']),
+            ];
+        }
+
         $request = $connection->prepare(
             'INSERT INTO email_requests
             (public_id, result_id, source_bucket, intended_count, opted_in_count,
@@ -248,7 +256,7 @@ function request_result_email(string $resultId, string $submittedRecipients, str
         );
         $request->execute([
             ':public_id' => $publicId,
-            ':result_id' => strtolower(trim($resultId)),
+            ':result_id' => $normalizedResultId,
             ':source_bucket' => consent_fingerprint('email-source', $sourceIp),
             ':intended_count' => $intendedCount,
             ':opted_in_count' => $activeCount,
@@ -263,7 +271,7 @@ function request_result_email(string $resultId, string $submittedRecipients, str
                 $connection,
                 (int) $recipient['recipient_id'],
                 $requestId,
-                strtolower(trim($resultId)),
+                $normalizedResultId,
                 (string) $recipient['email'],
                 $now
             );

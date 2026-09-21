@@ -37,7 +37,7 @@ try {
 
     $connection = result_storage_connection();
     consent_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 4,
+        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 5,
         'The consent schema was not initialized.'
     );
 
@@ -69,6 +69,28 @@ try {
     consent_test_assert(
         preg_match('/^[A-Za-z0-9_-]{43}$/', $confirmationToken) === 1,
         'The confirmation token does not contain 256 bits in base64url form.'
+    );
+
+    $tamperedConfirmation = substr($confirmationToken, 0, -1)
+        . ($confirmationToken[-1] === 'A' ? 'B' : 'A');
+    consent_test_expect_exception(
+        static fn () => confirm_recipient_consent($tamperedConfirmation, '192.0.2.10'),
+        InvalidConsentTokenException::class,
+        'A tampered confirmation token was accepted.'
+    );
+
+    $connection->exec(
+        "UPDATE consent_challenges SET expires_at = '2000-01-01T00:00:00Z'
+        WHERE purpose = 'enroll' AND consumed_at IS NULL"
+    );
+    consent_test_expect_exception(
+        static fn () => confirm_recipient_consent($confirmationToken, '192.0.2.10'),
+        InvalidConsentTokenException::class,
+        'An expired confirmation token was accepted.'
+    );
+    $connection->exec(
+        "UPDATE consent_challenges SET expires_at = '2999-01-01T00:00:00Z'
+        WHERE purpose = 'enroll' AND consumed_at IS NULL"
     );
 
     $confirmed = confirm_recipient_consent($confirmationToken, '192.0.2.10');
@@ -118,6 +140,10 @@ try {
     );
 
     $duplicate = request_recipient_consent('player.example@example.com', '192.0.2.10');
+    consent_test_assert(
+        $duplicate === $requested,
+        'An active address produced a distinguishable enrollment response.'
+    );
     consent_test_assert($duplicate['accepted'] === true, 'An active enrollment was not accepted generically.');
     consent_test_assert($duplicate['queued'] === true, 'An active address did not queue management recovery.');
 
@@ -129,6 +155,12 @@ try {
     consent_test_assert(is_array($recoveryMessage), 'The management recovery message was not queued.');
     $recoveryPayload = consent_decrypt_payload((string) $recoveryMessage['payload_ciphertext']);
     $recoveryToken = (string) $recoveryPayload['recovery_token'];
+
+    consent_test_expect_exception(
+        static fn () => confirm_recipient_consent($recoveryToken, '192.0.2.10'),
+        InvalidConsentTokenException::class,
+        'A recovery token was accepted as an opt-in token.'
+    );
 
     $recovered = recover_recipient_management($recoveryToken, '192.0.2.10');
     consent_test_assert(
@@ -213,6 +245,28 @@ try {
     consent_test_assert(
         consume_consent_rate_limit('test-bucket', 'subject', 2, 60, 1061),
         'The rate-limit window did not reset.'
+    );
+    $rateBucket = (string) $connection->query(
+        "SELECT bucket_key FROM rate_limits
+        WHERE attempts = 1 ORDER BY window_started_at DESC LIMIT 1"
+    )->fetchColumn();
+    consent_test_assert(
+        $rateBucket !== '' && !str_contains($rateBucket, 'subject'),
+        'A raw rate-limit identifier was retained.'
+    );
+
+    $_SESSION = [];
+    $csrfToken = consent_csrf_token();
+    validate_consent_csrf($csrfToken);
+    consent_test_expect_exception(
+        static fn () => validate_consent_csrf(''),
+        InvalidArgumentException::class,
+        'A missing CSRF token was accepted.'
+    );
+    consent_test_expect_exception(
+        static fn () => validate_consent_csrf(str_repeat('A', 43)),
+        InvalidArgumentException::class,
+        'A forged CSRF token was accepted.'
     );
 
     consent_test_expect_exception(

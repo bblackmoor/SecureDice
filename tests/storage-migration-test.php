@@ -8,6 +8,7 @@ $databasePath = sys_get_temp_dir()
     . '.sqlite';
 
 putenv('SECUREDICE_DB_PATH=' . $databasePath);
+putenv('SECUREDICE_SECRET=' . str_repeat('33', 32));
 
 function migration_test_assert(bool $condition, string $message): void
 {
@@ -20,6 +21,38 @@ try {
     $legacy = new PDO('sqlite:' . $databasePath, null, null, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     ]);
+    $legacyCanonicalJson = '{"generated_at":"2026-09-21T00:00:00+00:00","result_id":"'
+        . str_repeat('d', 32)
+        . '","schema_version":2}';
+    $legacy->exec(
+        "CREATE TABLE result_records (
+            public_id TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL,
+            generated_at TEXT NOT NULL,
+            canonical_json TEXT NOT NULL,
+            content_sha256 TEXT NOT NULL,
+            stored_at TEXT NOT NULL
+        ) WITHOUT ROWID"
+    );
+    $legacyResult = $legacy->prepare(
+        'INSERT INTO result_records
+        (public_id, schema_version, generated_at, canonical_json, content_sha256, stored_at)
+        VALUES (?, 2, ?, ?, ?, ?)'
+    );
+    $legacyResult->execute([
+        str_repeat('d', 32),
+        '2026-09-21T00:00:00+00:00',
+        $legacyCanonicalJson,
+        hash('sha256', $legacyCanonicalJson),
+        '2026-09-21T00:00:01+00:00',
+    ]);
+    $legacy->exec(
+        "CREATE TRIGGER result_records_prevent_update
+        BEFORE UPDATE ON result_records
+        BEGIN
+            SELECT RAISE(ABORT, 'result records are immutable');
+        END"
+    );
     $legacy->exec(
         "CREATE TABLE recipients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,8 +127,8 @@ try {
     $connection = result_storage_connection();
 
     migration_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 4,
-        'The version-2 database was not migrated to version 4.'
+        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 5,
+        'The version-2 database was not migrated to version 5.'
     );
     migration_test_assert(
         $connection->query('SELECT purpose FROM consent_challenges WHERE id = 1')->fetchColumn() === 'enroll',
@@ -134,6 +167,32 @@ try {
     migration_test_assert(
         $connection->query('SELECT status FROM recipient_capabilities WHERE id = 1')->fetchColumn() === 'revoked',
         'The retired recipient code remained active after migration.'
+    );
+    migration_test_assert(
+        (int) $connection->query(
+            "SELECT COUNT(*) FROM sqlite_master
+            WHERE type = 'table' AND name = 'result_delivery_claims'"
+        )->fetchColumn() === 1,
+        'The result replay-claim table was not created.'
+    );
+    $migratedHmac = (string) $connection->query(
+        'SELECT auth_hmac_sha256 FROM result_records LIMIT 1'
+    )->fetchColumn();
+    migration_test_assert(
+        hash_equals(result_authentication_hmac($legacyCanonicalJson), $migratedHmac),
+        'An existing result did not receive a valid authentication code.'
+    );
+
+    $immutableAfterMigration = false;
+
+    try {
+        $connection->exec("UPDATE result_records SET canonical_json = '{}'");
+    } catch (PDOException $e) {
+        $immutableAfterMigration = true;
+    }
+    migration_test_assert(
+        $immutableAfterMigration,
+        'The result immutability trigger was not restored after migration.'
     );
 
     echo "Storage migration tests passed.\n";

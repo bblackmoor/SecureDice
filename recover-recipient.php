@@ -8,14 +8,30 @@ require_once __DIR__ . '/consent.php';
 header('Cache-Control: private, no-store');
 header('X-Robots-Tag: noindex, nofollow');
 header('Referrer-Policy: no-referrer');
+send_security_headers();
+consent_start_session();
 
-$token = trim((string) ($_GET['token'] ?? ''));
+$token = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));
 $result = null;
+$ready = false;
 $error = '';
 $statusCode = 200;
 
 try {
-    $result = recover_recipient_management($token, consent_source_ip());
+    validate_long_consent_token($token);
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        validate_consent_csrf((string) ($_POST['csrf_token'] ?? ''));
+        $result = recover_recipient_management($token, consent_source_ip());
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        $ready = true;
+    } else {
+        $statusCode = 405;
+        $error = 'Open the recovery link from your email.';
+    }
+} catch (InvalidArgumentException $e) {
+    $statusCode = 400;
+    $error = $e->getMessage();
 } catch (InvalidConsentTokenException $e) {
     $statusCode = 400;
     $error = $e->getMessage();
@@ -74,6 +90,14 @@ $managementUrl = is_array($result)
                 <button class="sd2-action-btn neutral inline-action" type="button" data-copy="<?= h($managementUrl) ?>">Copy Link</button>
             </div>
             <p><a class="sd2-action-btn primary inline-action" href="<?= h($managementUrl) ?>">Open Email Settings</a></p>
+        <?php elseif ($ready): ?>
+            <h2 id="recovery-title">Replace your private settings link?</h2>
+            <p>This revokes the previous settings link and creates a replacement.</p>
+            <form method="post" action="recover-recipient.php">
+                <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
+                <input type="hidden" name="token" value="<?= h($token) ?>">
+                <button class="sd2-action-btn primary inline-action" type="submit">Replace Settings Link</button>
+            </form>
         <?php else: ?>
             <h2 id="recovery-title">Recovery unavailable</h2>
             <div class="consent-notice is-error" role="alert"><?= h($error) ?></div>

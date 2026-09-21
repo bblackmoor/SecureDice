@@ -8,6 +8,7 @@ $databasePath = sys_get_temp_dir()
     . '.sqlite';
 
 putenv('SECUREDICE_DB_PATH=' . $databasePath);
+putenv('SECUREDICE_SECRET=' . str_repeat('31', 32));
 
 require_once dirname(__DIR__) . '/storage.php';
 
@@ -48,11 +49,11 @@ try {
 
     $connection = result_storage_connection();
     storage_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 4,
+        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 5,
         'The result database schema version was not initialized.'
     );
     $statement = $connection->prepare(
-        'SELECT canonical_json, content_sha256
+        'SELECT canonical_json, content_sha256, auth_hmac_sha256
         FROM result_records
         WHERE public_id = :public_id'
     );
@@ -70,6 +71,13 @@ try {
     storage_test_assert(
         (string) $record['canonical_json'] === encode_canonical_result($stored),
         'The stored canonical result differs from the generated result.'
+    );
+    storage_test_assert(
+        hash_equals(
+            result_authentication_hmac((string) $record['canonical_json']),
+            (string) $record['auth_hmac_sha256']
+        ),
+        'The stored result authentication code is invalid.'
     );
 
     $updateWasRejected = false;
