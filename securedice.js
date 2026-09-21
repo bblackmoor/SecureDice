@@ -452,8 +452,7 @@
     function wireResultsCopyButtons() {
         const jsonTa = qsId("json-output");
         const copyJson = qsId("copy-json");
-        const copyUrl = qsId("copy-url");
-        const copyMd5 = qsId("copy-md5");
+        const copyVerificationUrl = qsId("copy-verification-url");
 
         if (copyJson && jsonTa) {
             copyJson.addEventListener("click", function () {
@@ -469,30 +468,16 @@
             });
         }
 
-        if (copyUrl) {
-            copyUrl.addEventListener("click", function () {
-                const txt = String(copyUrl.getAttribute("data-copy") || "");
+        if (copyVerificationUrl) {
+            copyVerificationUrl.addEventListener("click", function () {
+                const txt = String(copyVerificationUrl.getAttribute("data-copy") || "");
 
                 copyToClipboard(txt)
                     .then(function () {
-                        flashButtonText(copyUrl, "Copied!", 900);
+                        flashButtonText(copyVerificationUrl, "Copied!", 900);
                     })
                     .catch(function () {
-                        flashButtonText(copyUrl, "Copy Failed", 1200);
-                    });
-            });
-        }
-
-        if (copyMd5) {
-            copyMd5.addEventListener("click", function () {
-                const txt = String(copyMd5.getAttribute("data-copy") || "");
-
-                copyToClipboard(txt)
-                    .then(function () {
-                        flashButtonText(copyMd5, "Copied!", 900);
-                    })
-                    .catch(function () {
-                        flashButtonText(copyMd5, "Copy Failed", 1200);
+                        flashButtonText(copyVerificationUrl, "Copy Failed", 1200);
                     });
             });
         }

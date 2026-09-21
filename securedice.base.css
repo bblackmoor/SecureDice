@@ -98,6 +98,11 @@ body {
     color: var(--sd2-color-light-grey);
 }
 
+.site-subtitle a {
+    color: var(--sd2-color-light-blue);
+    font-weight: var(--sd2-text-weight-strong);
+}
+
 .site-badges {
     display: inline-flex;
     flex-wrap: wrap;
@@ -442,6 +447,101 @@ th {
 }
 
 /* Results */
+
+.verification-status {
+    border-left: 6px solid var(--sd2-color-highlight);
+}
+
+.verification-status.is-verified {
+    border-left-color: var(--sd2-color-special);
+    background: #f3fbf3;
+}
+
+.verification-status.is-error {
+    border-left-color: var(--sd2-color-danger);
+    background: #fff7f3;
+}
+
+.verification-status h2 {
+    margin: 0 0 var(--sd2-whitespace-xs);
+    font-size: var(--sd2-text-size-xl);
+}
+
+.verification-status p {
+    margin: var(--sd2-whitespace-sm) 0;
+}
+
+.result-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sd2-whitespace-sm) var(--sd2-whitespace-lg);
+    margin: var(--sd2-whitespace-md) 0;
+}
+
+.result-metadata div {
+    min-width: 0;
+}
+
+.result-metadata dt {
+    color: var(--sd2-color-dark-grey);
+    font-size: var(--sd2-text-size-sm);
+    font-weight: var(--sd2-text-weight-heavy);
+    text-transform: uppercase;
+}
+
+.result-metadata dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.verification-link {
+    overflow-wrap: anywhere;
+}
+
+.verification-link code,
+.result-metadata code {
+    color: var(--sd2-color-highlight);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: var(--sd2-text-weight-strong);
+}
+
+.verification-form {
+    max-width: 760px;
+    margin-top: var(--sd2-whitespace-md);
+}
+
+.verification-form label {
+    display: block;
+    margin-left: 0;
+    font-weight: var(--sd2-text-weight-heavy);
+}
+
+.verification-form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: var(--sd2-whitespace-sm);
+}
+
+.verification-form-row input {
+    min-width: 0;
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.verification-form-row .sd2-action-btn {
+    white-space: nowrap;
+}
+
+.field-help {
+    margin-top: var(--sd2-whitespace-xs);
+    color: var(--sd2-color-dark-grey);
+    font-size: var(--sd2-text-size-sm);
+}
+
+.inline-action {
+    display: inline-block;
+}
 
 .results-card {
     padding: var(--sd2-whitespace-sm);

@@ -198,6 +198,9 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
         <p class="site-subtitle">
             Tip: Bookmark preset URLs for your most frequently used rolls.
         </p>
+        <p class="site-subtitle">
+            Already have a result ID? <a href="verify.php">Verify a stored result.</a>
+        </p>
     </div>
 </header>
 

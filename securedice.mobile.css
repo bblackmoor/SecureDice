@@ -66,6 +66,18 @@
         box-shadow: 0 var(--sd2-whitespace-xs) var(--sd2-whitespace-md) rgba(0, 0, 0, 0.35);
     }
 
+    body:has(.floating-actions.has-four-actions) {
+        padding-top: calc(82px + var(--sd2-whitespace-xs));
+    }
+
+    .floating-actions.has-four-actions {
+        flex-wrap: wrap;
+    }
+
+    .floating-actions.has-four-actions .sd2-action-btn {
+        flex: 1 1 calc(50% - var(--sd2-whitespace-xs));
+    }
+
     .sd2-action-btn {
         flex: 1 1 0;
         min-width: 0;
@@ -142,5 +154,14 @@
         min-height: 180px;
         max-width: 100%;
         overflow: auto;
+    }
+
+    .result-metadata {
+        flex-direction: column;
+        gap: var(--sd2-whitespace-sm);
+    }
+
+    .verification-form-row {
+        grid-template-columns: 1fr;
     }
 }

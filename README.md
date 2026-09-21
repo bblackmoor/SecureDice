@@ -10,8 +10,8 @@ Secure Dice is a free, account-free online dice roller for tabletop roleplaying 
 - **Repeated sets:** Generate as many as 100 sets at once, optionally sorted by final total.
 - **Predictable URLs:** Copy or bookmark a URL that restores the complete roll setup.
 - **Readable results:** Results show individual dice, dropped and special dice, modifiers, arithmetic, final totals, and summary statistics.
-- **Portable records:** Copy the canonical result data as JSON together with its MD5 hash.
-- **Immutable records:** Every completed roll is stored under a random 128-bit result ID for server-backed verification work.
+- **Authenticated records:** Every completed roll is stored under a random 128-bit result ID and can be verified against the server's immutable copy.
+- **Portable records:** Copy or download the exact canonical result data as JSON.
 
 Secure Dice is available at [RPG Library](https://www.rpglibrary.org/software/securedice/).
 
@@ -59,10 +59,16 @@ The results page also provides:
 - Minimum, maximum, and average final totals.
 - A preset URL for rolling the same specification again.
 - Canonical JSON containing the specification, generated time, individual dice, and totals.
-- An MD5 hash of that JSON.
-- Buttons for copying the preset URL, JSON, or hash.
+- A permanent verification link and random result ID.
+- Buttons for opening the verified record and copying its link or canonical JSON.
 
-The MD5 hash can reveal whether copied JSON has changed. It is an integrity check, not a digital signature or proof that a result originated from a particular server.
+## Result Verification
+
+Each roll is stored as an immutable canonical record before its results page is displayed. To verify a roll, open its verification link or enter its 32-character result ID on `verify.php`. Secure Dice retrieves its authoritative database copy, confirms its internal SHA-256 integrity digest, validates the record structure, and then renders the stored result.
+
+Successful verification establishes that the result is the record retained by that Secure Dice server. The SHA-256 digest is an internal corruption check; it is not presented as a standalone signature or as proof independent of the server and its HTTPS identity.
+
+Verification links do not depend on the browser session that generated the roll. Verified canonical JSON can also be downloaded from the verification page.
 
 ## URL Presets
 
@@ -107,12 +113,13 @@ SECUREDICE_DB_PATH=/absolute/private/path/securedice.sqlite
 
 The configured directory must already exist and be writable by PHP. Secure Dice does not require a separate database server or user accounts.
 
-Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, and a SHA-256 integrity digest. They are insert-only; a database trigger prevents an existing result from being changed. The public verification workflow will be added separately.
+Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, and a SHA-256 integrity digest. They are insert-only; a database trigger prevents an existing result from being changed. Database files and SQLite sidecar files are restricted to the PHP process owner when the host permits permission changes.
 
-To run the storage test:
+To run the storage and verification tests:
 
 ```shell
 php tests/storage-test.php
+php tests/verification-test.php
 ```
 
 ## Versioning
