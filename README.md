@@ -12,6 +12,7 @@ Secure Dice is a free, account-free online dice roller for tabletop roleplaying 
 - **Readable results:** Results show individual dice, dropped and special dice, modifiers, arithmetic, final totals, and summary statistics.
 - **Authenticated records:** Every completed roll is stored under a random 128-bit result ID and can be verified against the server's immutable copy.
 - **Portable records:** Copy or download the exact canonical result data as JSON.
+- **Recipient consent:** Email recipients opt in before receiving a private, revocable sharing code.
 
 Secure Dice is available at [RPG Library](https://www.rpglibrary.org/software/securedice/).
 
@@ -70,6 +71,19 @@ Successful verification establishes that the result is the record retained by th
 
 Verification links do not depend on the browser session that generated the roll. Verified canonical JSON can also be downloaded from the verification page.
 
+## Recipient Consent
+
+The consent system separates a recipient's address from the code they share with a roller:
+
+1. The recipient submits an address on `recipient.php`.
+2. Secure Dice stores the address encrypted and queues a confirmation message with a single-use link that expires after 24 hours.
+3. Following the link activates consent and displays a random 80-bit recipient code plus a private 256-bit management link. These credentials are shown once; only their SHA-256 hashes are stored.
+4. The recipient can use the private link to rotate the sharing code or revoke consent. Rotation invalidates the old code, and revocation invalidates both the code and management link immediately.
+
+Enrollment responses are deliberately generic so they do not disclose whether an address is already enrolled. Keyed fixed-window limits constrain enrollment, confirmation, and management attempts without retaining raw IP addresses. Consent forms use same-site session cookies and CSRF tokens, and consent pages instruct browsers and search engines not to cache or index private values.
+
+This stage records confirmation messages in the encrypted `outbound_messages` queue but does not transmit email. SMTP delivery, retries, and delivery history are implemented in the next stage. Until that is configured, operators can test the domain workflow through the automated consent test, but should not publish `recipient.php` as an active enrollment service.
+
 ## URL Presets
 
 Secure Dice encodes roll settings in ordinary query parameters so presets can be bookmarked or shared.
@@ -100,7 +114,7 @@ Place the repository files in a PHP-enabled web directory and direct users to `s
 
 Secure Dice requires:
 
-- PHP with `random_int()`, session support, PDO, and the PDO SQLite driver.
+- PHP with `random_int()`, session support, Sodium, PDO, and the PDO SQLite driver.
 - A web server capable of running PHP.
 - Browser cookies for the short-lived session that transfers a roll to its results page.
 - A writable directory for the SQLite result database.
@@ -113,13 +127,26 @@ SECUREDICE_DB_PATH=/absolute/private/path/securedice.sqlite
 
 The configured directory must already exist and be writable by PHP. Secure Dice does not require a separate database server or user accounts.
 
+Recipient consent also requires a persistent 256-bit application secret, supplied as exactly 64 hexadecimal characters. Generate it once and store it in the deployment's secret manager or environment configuration:
+
+```shell
+php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+```
+
+```text
+SECUREDICE_SECRET=<64 hexadecimal characters>
+```
+
+Never commit this value. Back it up as carefully as the database and do not rotate it casually: it keys address encryption, private fingerprints, and rate-limit buckets, so replacing it makes existing encrypted recipient records unusable. The result-verification feature does not require this secret.
+
 Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, and a SHA-256 integrity digest. They are insert-only; a database trigger prevents an existing result from being changed. Database files and SQLite sidecar files are restricted to the PHP process owner when the host permits permission changes.
 
-To run the storage and verification tests:
+To run the storage, verification, and consent tests:
 
 ```shell
 php tests/storage-test.php
 php tests/verification-test.php
+php tests/consent-test.php
 ```
 
 ## Versioning

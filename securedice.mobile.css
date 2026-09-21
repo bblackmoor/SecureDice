@@ -164,4 +164,15 @@
     .verification-form-row {
         grid-template-columns: 1fr;
     }
+
+    .secret-row {
+        grid-template-columns: 1fr;
+    }
+
+    .secret-row .sd2-action-btn,
+    .consent-actions,
+    .consent-actions form,
+    .consent-actions .sd2-action-btn {
+        width: 100%;
+    }
 }

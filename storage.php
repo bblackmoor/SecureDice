@@ -69,6 +69,7 @@ function result_storage_connection(): PDO
         );
 
         $connection->exec('PRAGMA busy_timeout = 5000');
+        $connection->exec('PRAGMA foreign_keys = ON');
         $connection->query('PRAGMA journal_mode = WAL');
         initialize_result_storage($connection);
 
@@ -99,7 +100,7 @@ function initialize_result_storage(PDO $connection): void
 {
     $storageSchemaVersion = (int) $connection->query('PRAGMA user_version')->fetchColumn();
 
-    if ($storageSchemaVersion > 1) {
+    if ($storageSchemaVersion > 2) {
         throw new RuntimeException('The result database uses a newer schema.');
     }
 
@@ -125,8 +126,98 @@ function initialize_result_storage(PDO $connection): void
             END"
         );
 
-        if ($storageSchemaVersion === 0) {
-            $connection->exec('PRAGMA user_version = 1');
+        if ($storageSchemaVersion < 2) {
+            $connection->exec(
+                "CREATE TABLE IF NOT EXISTS recipients (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email_fingerprint TEXT NOT NULL UNIQUE CHECK (length(email_fingerprint) = 64),
+                    email_ciphertext TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'revoked')),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    confirmed_at TEXT,
+                    revoked_at TEXT
+                )"
+            );
+
+            $connection->exec(
+                'CREATE TABLE IF NOT EXISTS consent_challenges (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recipient_id INTEGER NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE CHECK (length(token_hash) = 64),
+                    expires_at TEXT NOT NULL,
+                    consumed_at TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
+                )'
+            );
+
+            $connection->exec(
+                "CREATE TABLE IF NOT EXISTS recipient_capabilities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recipient_id INTEGER NOT NULL,
+                    code_hash TEXT NOT NULL UNIQUE CHECK (length(code_hash) = 64),
+                    status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
+                    created_at TEXT NOT NULL,
+                    revoked_at TEXT,
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
+                )"
+            );
+
+            $connection->exec(
+                "CREATE TABLE IF NOT EXISTS recipient_management_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recipient_id INTEGER NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE CHECK (length(token_hash) = 64),
+                    status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
+                    created_at TEXT NOT NULL,
+                    revoked_at TEXT,
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
+                )"
+            );
+
+            $connection->exec(
+                "CREATE TABLE IF NOT EXISTS outbound_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_type TEXT NOT NULL CHECK (message_type IN ('consent_confirmation')),
+                    recipient_id INTEGER NOT NULL,
+                    payload_ciphertext TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    available_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    sent_at TEXT,
+                    last_error TEXT,
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
+                )"
+            );
+
+            $connection->exec(
+                'CREATE TABLE IF NOT EXISTS rate_limits (
+                    bucket_key TEXT PRIMARY KEY CHECK (length(bucket_key) = 64),
+                    window_started_at INTEGER NOT NULL,
+                    attempts INTEGER NOT NULL
+                ) WITHOUT ROWID'
+            );
+
+            $connection->exec(
+                'CREATE INDEX IF NOT EXISTS consent_challenges_recipient
+                ON consent_challenges(recipient_id, consumed_at, expires_at)'
+            );
+            $connection->exec(
+                'CREATE INDEX IF NOT EXISTS recipient_capabilities_recipient
+                ON recipient_capabilities(recipient_id, status)'
+            );
+            $connection->exec(
+                'CREATE INDEX IF NOT EXISTS recipient_management_recipient
+                ON recipient_management_tokens(recipient_id, status)'
+            );
+            $connection->exec(
+                'CREATE INDEX IF NOT EXISTS outbound_messages_pending
+                ON outbound_messages(status, available_at)'
+            );
+
+            $connection->exec('PRAGMA user_version = 2');
         }
 
         $connection->commit();

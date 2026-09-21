@@ -452,7 +452,6 @@
     function wireResultsCopyButtons() {
         const jsonTa = qsId("json-output");
         const copyJson = qsId("copy-json");
-        const copyVerificationUrl = qsId("copy-verification-url");
 
         if (copyJson && jsonTa) {
             copyJson.addEventListener("click", function () {
@@ -468,19 +467,19 @@
             });
         }
 
-        if (copyVerificationUrl) {
-            copyVerificationUrl.addEventListener("click", function () {
-                const txt = String(copyVerificationUrl.getAttribute("data-copy") || "");
+        Array.prototype.forEach.call(document.querySelectorAll("[data-copy]"), function (copyButton) {
+            copyButton.addEventListener("click", function () {
+                const txt = String(copyButton.getAttribute("data-copy") || "");
 
                 copyToClipboard(txt)
                     .then(function () {
-                        flashButtonText(copyVerificationUrl, "Copied!", 900);
+                        flashButtonText(copyButton, "Copied!", 900);
                     })
                     .catch(function () {
-                        flashButtonText(copyVerificationUrl, "Copy Failed", 1200);
+                        flashButtonText(copyButton, "Copy Failed", 1200);
                     });
             });
-        }
+        });
     }
 
     function init() {
