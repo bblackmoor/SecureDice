@@ -100,7 +100,7 @@ function initialize_result_storage(PDO $connection): void
 {
     $storageSchemaVersion = (int) $connection->query('PRAGMA user_version')->fetchColumn();
 
-    if ($storageSchemaVersion > 2) {
+    if ($storageSchemaVersion > 3) {
         throw new RuntimeException('The result database uses a newer schema.');
     }
 
@@ -218,6 +218,64 @@ function initialize_result_storage(PDO $connection): void
             );
 
             $connection->exec('PRAGMA user_version = 2');
+        }
+
+        if ($storageSchemaVersion < 3) {
+            $connection->exec(
+                "ALTER TABLE consent_challenges
+                ADD COLUMN purpose TEXT NOT NULL DEFAULT 'enroll'
+                CHECK (purpose IN ('enroll', 'management_recovery'))"
+            );
+
+            $connection->exec(
+                "CREATE TABLE outbound_messages_v3 (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_type TEXT NOT NULL CHECK (
+                        message_type IN ('consent_confirmation', 'management_recovery', 'consent_credentials')
+                    ),
+                    recipient_id INTEGER NOT NULL,
+                    payload_ciphertext TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    available_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    sent_at TEXT,
+                    last_error TEXT,
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
+                )"
+            );
+            $connection->exec(
+                'INSERT INTO outbound_messages_v3
+                (id, message_type, recipient_id, payload_ciphertext, status, attempts,
+                    available_at, created_at, sent_at, last_error)
+                SELECT id, message_type, recipient_id, payload_ciphertext, status, attempts,
+                    available_at, created_at, sent_at, last_error
+                FROM outbound_messages'
+            );
+            $connection->exec('DROP TABLE outbound_messages');
+            $connection->exec('ALTER TABLE outbound_messages_v3 RENAME TO outbound_messages');
+
+            $connection->exec(
+                'CREATE TABLE recipient_unsubscribe_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recipient_id INTEGER NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE CHECK (length(token_hash) = 64),
+                    created_at TEXT NOT NULL,
+                    used_at TEXT,
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
+                )'
+            );
+
+            $connection->exec(
+                'CREATE INDEX outbound_messages_pending
+                ON outbound_messages(status, available_at)'
+            );
+            $connection->exec(
+                'CREATE INDEX recipient_unsubscribe_recipient
+                ON recipient_unsubscribe_tokens(recipient_id, used_at)'
+            );
+
+            $connection->exec('PRAGMA user_version = 3');
         }
 
         $connection->commit();

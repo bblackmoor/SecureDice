@@ -15,7 +15,7 @@ $error = '';
 $statusCode = 200;
 
 try {
-    $result = confirm_recipient_consent($token, consent_source_ip());
+    $result = recover_recipient_management($token, consent_source_ip());
 } catch (InvalidConsentTokenException $e) {
     $statusCode = 400;
     $error = $e->getMessage();
@@ -24,11 +24,11 @@ try {
     $error = $e->getMessage();
 } catch (ConsentConfigurationException $e) {
     $statusCode = 503;
-    $error = 'Recipient confirmation is temporarily unavailable.';
+    $error = 'Management-link recovery is temporarily unavailable.';
 } catch (Throwable $e) {
-    error_log('Secure Dice consent confirmation error: ' . $e->getMessage());
+    error_log('Secure Dice management recovery error: ' . $e->getMessage());
     $statusCode = 503;
-    $error = 'Recipient confirmation is temporarily unavailable.';
+    $error = 'Management-link recovery is temporarily unavailable.';
 }
 
 http_response_code($statusCode);
@@ -40,7 +40,7 @@ $managementUrl = is_array($result)
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Confirm recipient — Secure Dice</title>
+    <title>Recover consent management — Secure Dice</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
     <meta name="referrer" content="no-referrer">
@@ -55,41 +55,28 @@ $managementUrl = is_array($result)
             <h1 class="site-title">Secure Dice</h1>
             <div class="site-badges" aria-label="Status">
                 <span class="badge">Private</span>
-                <span class="badge badge-primary">Recipient Opt-in</span>
+                <span class="badge badge-primary">Link Recovery</span>
             </div>
         </div>
-        <p class="site-subtitle">Confirm control of your address and receive private recipient credentials.</p>
+        <p class="site-subtitle">Replace a lost management link without creating an account.</p>
     </div>
 </header>
 
 <main>
-    <section class="card consent-card" aria-labelledby="confirmation-title">
+    <section class="card consent-card" aria-labelledby="recovery-title">
         <?php if (is_array($result)): ?>
-            <h2 id="confirmation-title">Recipient confirmed</h2>
-            <p><strong><?= h($result['masked_email']) ?></strong> can now receive Secure Dice results.</p>
-            <div class="consent-notice is-success" role="status">
-                Save both values now. A credentials message has also been queued so closing this page will not permanently lose them.
-            </div>
-
-            <h3>Recipient code</h3>
-            <p>Share this code with people you permit to email results to you.</p>
-            <div class="secret-row">
-                <code class="secret-value"><?= h($result['recipient_code']) ?></code>
-                <button class="sd2-action-btn neutral inline-action" type="button" data-copy="<?= h($result['recipient_code']) ?>">Copy Code</button>
-            </div>
-
-            <h3>Private management link</h3>
-            <p>Keep this link private. It can rotate your code or revoke consent immediately.</p>
+            <h2 id="recovery-title">Management link replaced</h2>
+            <p>The previous management link for <strong><?= h($result['masked_email']) ?></strong> has been revoked.</p>
+            <div class="consent-notice is-success" role="status">Save this private replacement. A credentials message has also been queued for your address.</div>
             <div class="secret-row">
                 <code class="secret-value secret-url"><?= h($managementUrl) ?></code>
                 <button class="sd2-action-btn neutral inline-action" type="button" data-copy="<?= h($managementUrl) ?>">Copy Link</button>
             </div>
             <p><a class="sd2-action-btn primary inline-action" href="<?= h($managementUrl) ?>">Manage Consent</a></p>
         <?php else: ?>
-            <h2 id="confirmation-title">Confirmation unavailable</h2>
+            <h2 id="recovery-title">Recovery unavailable</h2>
             <div class="consent-notice is-error" role="alert"><?= h($error) ?></div>
-            <p>Request a new confirmation if this link has expired or was already used.</p>
-            <p><a class="sd2-action-btn primary inline-action" href="recipient.php">Request Confirmation</a></p>
+            <p><a class="sd2-action-btn primary inline-action" href="recipient.php">Request Another Email</a></p>
         <?php endif; ?>
     </section>
 </main>

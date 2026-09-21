@@ -37,7 +37,7 @@ try {
 
     $connection = result_storage_connection();
     consent_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 2,
+        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 3,
         'The consent schema was not initialized.'
     );
 
@@ -83,6 +83,12 @@ try {
     consent_test_assert(
         $confirmed['masked_email'] === 'p********@example.com',
         'The confirmed address was not safely masked.'
+    );
+    consent_test_assert(
+        (int) $connection->query(
+            "SELECT COUNT(*) FROM outbound_messages WHERE message_type = 'consent_credentials'"
+        )->fetchColumn() === 1,
+        'Confirmation did not queue a durable credentials message.'
     );
 
     $connection->exec('PRAGMA wal_checkpoint(FULL)');
@@ -131,22 +137,86 @@ try {
     consent_test_assert(resolve_recipient_code($oldCode) === null, 'The prior code survived rotation.');
     consent_test_assert(is_array(resolve_recipient_code($newCode)), 'The replacement code is inactive.');
 
-    $messageCountBefore = (int) $connection->query('SELECT COUNT(*) FROM outbound_messages')->fetchColumn();
     $duplicate = request_recipient_consent('player.example@example.com', '192.0.2.10');
-    $messageCountAfter = (int) $connection->query('SELECT COUNT(*) FROM outbound_messages')->fetchColumn();
     consent_test_assert($duplicate['accepted'] === true, 'An active enrollment was not accepted generically.');
-    consent_test_assert($duplicate['queued'] === false, 'An active address queued a duplicate confirmation.');
-    consent_test_assert(
-        $messageCountBefore === $messageCountAfter,
-        'An active enrollment leaked state by creating another queued message.'
-    );
+    consent_test_assert($duplicate['queued'] === true, 'An active address did not queue management recovery.');
 
-    revoke_recipient_consent($confirmed['management_token']);
-    consent_test_assert(resolve_recipient_code($newCode) === null, 'A recipient code survived revocation.');
+    $recoveryMessage = $connection->query(
+        "SELECT payload_ciphertext FROM outbound_messages
+        WHERE message_type = 'management_recovery' AND status = 'pending'
+        ORDER BY id DESC LIMIT 1"
+    )->fetch();
+    consent_test_assert(is_array($recoveryMessage), 'The management recovery message was not queued.');
+    $recoveryPayload = consent_decrypt_payload((string) $recoveryMessage['payload_ciphertext']);
+    $recoveryToken = (string) $recoveryPayload['recovery_token'];
+
+    $recovered = recover_recipient_management($recoveryToken, '192.0.2.10');
+    consent_test_assert(
+        $recovered['management_token'] !== $confirmed['management_token'],
+        'Recovery did not create a replacement management token.'
+    );
+    consent_test_assert(
+        is_array(find_recipient_management($recovered['management_token'])),
+        'The recovered management link is inactive.'
+    );
     consent_test_expect_exception(
         static fn () => find_recipient_management($confirmed['management_token']),
         InvalidConsentTokenException::class,
+        'The prior management link survived recovery.'
+    );
+    consent_test_expect_exception(
+        static fn () => recover_recipient_management($recoveryToken, '192.0.2.10'),
+        InvalidConsentTokenException::class,
+        'A management recovery token was accepted twice.'
+    );
+
+    $credentialsMessage = $connection->query(
+        "SELECT payload_ciphertext FROM outbound_messages
+        WHERE message_type = 'consent_credentials' AND status = 'pending'
+        ORDER BY id DESC LIMIT 1"
+    )->fetch();
+    consent_test_assert(is_array($credentialsMessage), 'Recovered credentials were not queued.');
+    $credentialsPayload = consent_decrypt_payload((string) $credentialsMessage['payload_ciphertext']);
+    $unsubscribeToken = (string) $credentialsPayload['unsubscribe_token'];
+    $unsubscribe = get_recipient_unsubscribe($unsubscribeToken, '192.0.2.10');
+    consent_test_assert(
+        $unsubscribe['masked_email'] === 'p********@example.com',
+        'The unsubscribe capability returned the wrong recipient.'
+    );
+
+    revoke_recipient_with_unsubscribe_token($unsubscribeToken);
+    consent_test_assert(resolve_recipient_code($newCode) === null, 'A recipient code survived revocation.');
+    consent_test_assert(
+        (int) $connection->query("SELECT COUNT(*) FROM outbound_messages WHERE status = 'pending'")->fetchColumn() === 0,
+        'Pending messages survived recipient revocation.'
+    );
+    consent_test_expect_exception(
+        static fn () => find_recipient_management($recovered['management_token']),
+        InvalidConsentTokenException::class,
         'A management token survived revocation.'
+    );
+    consent_test_expect_exception(
+        static fn () => find_recipient_unsubscribe($unsubscribeToken),
+        InvalidConsentTokenException::class,
+        'An unsubscribe token was accepted twice.'
+    );
+
+    $optedInAgain = request_recipient_consent('player.example@example.com', '192.0.2.11');
+    consent_test_assert($optedInAgain['queued'] === true, 'A revoked recipient could not opt in again.');
+    $newConfirmation = $connection->query(
+        "SELECT payload_ciphertext FROM outbound_messages
+        WHERE message_type = 'consent_confirmation' AND status = 'pending'
+        ORDER BY id DESC LIMIT 1"
+    )->fetch();
+    $newConfirmationPayload = consent_decrypt_payload((string) $newConfirmation['payload_ciphertext']);
+    $confirmedAgain = confirm_recipient_consent(
+        (string) $newConfirmationPayload['confirmation_token'],
+        '192.0.2.11'
+    );
+    revoke_recipient_consent($confirmedAgain['management_token']);
+    consent_test_assert(
+        resolve_recipient_code($confirmedAgain['recipient_code']) === null,
+        'Management-link revocation did not disable the recipient code.'
     );
 
     consent_test_assert(

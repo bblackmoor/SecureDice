@@ -298,7 +298,48 @@ function enforce_consent_rate_limit(
     }
 }
 
-/** Create or refresh a pending opt-in and queue its confirmation message. */
+function queue_consent_message(
+    PDO $connection,
+    int $recipientId,
+    string $messageType,
+    array $payload,
+    string $now
+): void {
+    $message = $connection->prepare(
+        'INSERT INTO outbound_messages
+        (message_type, recipient_id, payload_ciphertext, status, available_at, created_at)
+        VALUES (:message_type, :recipient_id, :payload, \'pending\', :available_at, :created_at)'
+    );
+    $message->execute([
+        ':message_type' => $messageType,
+        ':recipient_id' => $recipientId,
+        ':payload' => consent_encrypt_payload($payload),
+        ':available_at' => $now,
+        ':created_at' => $now,
+    ]);
+}
+
+function insert_unsubscribe_token(PDO $connection, int $recipientId, string $now): string
+{
+    $token = generate_long_consent_token();
+    $statement = $connection->prepare(
+        'INSERT INTO recipient_unsubscribe_tokens
+        (recipient_id, token_hash, created_at)
+        VALUES (:recipient_id, :token_hash, :created_at)'
+    );
+    $statement->execute([
+        ':recipient_id' => $recipientId,
+        ':token_hash' => consent_token_hash($token),
+        ':created_at' => $now,
+    ]);
+
+    return $token;
+}
+
+/**
+ * Queue either a new opt-in confirmation or an active recipient's private
+ * management-link recovery. The outward response is identical in both cases.
+ */
 function request_recipient_consent(string $submittedEmail, string $sourceIp): array
 {
     $email = normalize_recipient_email($submittedEmail);
@@ -312,18 +353,19 @@ function request_recipient_consent(string $submittedEmail, string $sourceIp): ar
     $lookup->execute([':fingerprint' => $fingerprint]);
     $existing = $lookup->fetch();
 
-    // Active addresses get the same outward response without another message.
-    if (is_array($existing) && $existing['status'] === 'active') {
-        return ['accepted' => true, 'queued' => false];
-    }
-
     $now = consent_timestamp();
     $token = generate_long_consent_token();
     $expires = consent_timestamp(time() + 86400);
+    $isRecovery = is_array($existing) && $existing['status'] === 'active';
+    $purpose = $isRecovery ? 'management_recovery' : 'enroll';
+    $messageType = $isRecovery ? 'management_recovery' : 'consent_confirmation';
+    $tokenField = $isRecovery ? 'recovery_token' : 'confirmation_token';
     $connection->beginTransaction();
 
     try {
-        if (is_array($existing)) {
+        if ($isRecovery) {
+            $recipientId = (int) $existing['id'];
+        } elseif (is_array($existing)) {
             $recipientId = (int) $existing['id'];
             $update = $connection->prepare(
                 "UPDATE recipients
@@ -353,45 +395,43 @@ function request_recipient_consent(string $submittedEmail, string $sourceIp): ar
 
         $consume = $connection->prepare(
             'UPDATE consent_challenges SET consumed_at = :consumed_at
-            WHERE recipient_id = :recipient_id AND consumed_at IS NULL'
+            WHERE recipient_id = :recipient_id AND purpose = :purpose AND consumed_at IS NULL'
         );
-        $consume->execute([':consumed_at' => $now, ':recipient_id' => $recipientId]);
+        $consume->execute([
+            ':consumed_at' => $now,
+            ':recipient_id' => $recipientId,
+            ':purpose' => $purpose,
+        ]);
 
         $supersede = $connection->prepare(
             "UPDATE outbound_messages
             SET status = 'failed', last_error = 'superseded'
-            WHERE recipient_id = :recipient_id AND message_type = 'consent_confirmation'
+            WHERE recipient_id = :recipient_id AND message_type = :message_type
                 AND status = 'pending'"
         );
-        $supersede->execute([':recipient_id' => $recipientId]);
+        $supersede->execute([
+            ':recipient_id' => $recipientId,
+            ':message_type' => $messageType,
+        ]);
 
         $challenge = $connection->prepare(
             'INSERT INTO consent_challenges
-            (recipient_id, token_hash, expires_at, created_at)
-            VALUES (:recipient_id, :token_hash, :expires_at, :created_at)'
+            (recipient_id, token_hash, expires_at, created_at, purpose)
+            VALUES (:recipient_id, :token_hash, :expires_at, :created_at, :purpose)'
         );
         $challenge->execute([
             ':recipient_id' => $recipientId,
             ':token_hash' => consent_token_hash($token),
             ':expires_at' => $expires,
             ':created_at' => $now,
+            ':purpose' => $purpose,
         ]);
 
-        $message = $connection->prepare(
-            "INSERT INTO outbound_messages
-            (message_type, recipient_id, payload_ciphertext, status, available_at, created_at)
-            VALUES ('consent_confirmation', :recipient_id, :payload, 'pending', :available_at, :created_at)"
-        );
-        $message->execute([
-            ':recipient_id' => $recipientId,
-            ':payload' => consent_encrypt_payload([
-                'email' => $email,
-                'confirmation_token' => $token,
-                'expires_at' => $expires,
-            ]),
-            ':available_at' => $now,
-            ':created_at' => $now,
-        ]);
+        queue_consent_message($connection, $recipientId, $messageType, [
+            'email' => $email,
+            $tokenField => $token,
+            'expires_at' => $expires,
+        ], $now);
 
         $connection->commit();
     } catch (Throwable $e) {
@@ -419,6 +459,7 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
             FROM consent_challenges c
             JOIN recipients r ON r.id = c.recipient_id
             WHERE c.token_hash = :token_hash
+                AND c.purpose = 'enroll'
                 AND c.consumed_at IS NULL
                 AND c.expires_at >= :now
                 AND r.status = 'pending'"
@@ -434,6 +475,7 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
         $recipientId = (int) $record['recipient_id'];
         $code = generate_recipient_code();
         $managementToken = generate_long_consent_token();
+        $unsubscribeToken = insert_unsubscribe_token($connection, $recipientId, $now);
 
         $consume = $connection->prepare(
             'UPDATE consent_challenges SET consumed_at = :now WHERE id = :id AND consumed_at IS NULL'
@@ -477,6 +519,20 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
             ':created_at' => $now,
         ]);
 
+        $supersedeCredentials = $connection->prepare(
+            "UPDATE outbound_messages SET status = 'failed', last_error = 'superseded'
+            WHERE recipient_id = :recipient_id
+                AND message_type = 'consent_credentials' AND status = 'pending'"
+        );
+        $supersedeCredentials->execute([':recipient_id' => $recipientId]);
+
+        queue_consent_message($connection, $recipientId, 'consent_credentials', [
+            'email' => consent_decrypt_string((string) $record['email_ciphertext']),
+            'recipient_code' => $code['formatted'],
+            'management_token' => $managementToken,
+            'unsubscribe_token' => $unsubscribeToken,
+        ], $now);
+
         $connection->commit();
     } catch (Throwable $e) {
         if ($connection->inTransaction()) {
@@ -490,6 +546,88 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
         'recipient_code' => $code['formatted'],
         'management_token' => $managementToken,
         'masked_email' => mask_recipient_email(consent_decrypt_string((string) $record['email_ciphertext'])),
+    ];
+}
+
+/** Exchange an emailed recovery challenge for a replacement management link. */
+function recover_recipient_management(string $submittedToken, string $sourceIp): array
+{
+    enforce_consent_rate_limit('recovery-ip', $sourceIp, 20, 3600);
+    $token = validate_long_consent_token($submittedToken);
+    $connection = result_storage_connection();
+    $connection->beginTransaction();
+
+    try {
+        $lookup = $connection->prepare(
+            "SELECT c.id AS challenge_id, c.recipient_id, r.email_ciphertext
+            FROM consent_challenges c
+            JOIN recipients r ON r.id = c.recipient_id
+            WHERE c.token_hash = :token_hash
+                AND c.purpose = 'management_recovery'
+                AND c.consumed_at IS NULL
+                AND c.expires_at >= :now
+                AND r.status = 'active'"
+        );
+        $now = consent_timestamp();
+        $lookup->execute([':token_hash' => consent_token_hash($token), ':now' => $now]);
+        $record = $lookup->fetch();
+
+        if (!is_array($record)) {
+            throw new InvalidConsentTokenException('The recovery link is invalid or has expired.');
+        }
+
+        $recipientId = (int) $record['recipient_id'];
+        $managementToken = generate_long_consent_token();
+        $unsubscribeToken = insert_unsubscribe_token($connection, $recipientId, $now);
+
+        $consume = $connection->prepare(
+            'UPDATE consent_challenges SET consumed_at = :now WHERE id = :id AND consumed_at IS NULL'
+        );
+        $consume->execute([':now' => $now, ':id' => (int) $record['challenge_id']]);
+
+        $revoke = $connection->prepare(
+            "UPDATE recipient_management_tokens SET status = 'revoked', revoked_at = :now
+            WHERE recipient_id = :recipient_id AND status = 'active'"
+        );
+        $revoke->execute([':now' => $now, ':recipient_id' => $recipientId]);
+
+        $management = $connection->prepare(
+            "INSERT INTO recipient_management_tokens
+            (recipient_id, token_hash, status, created_at)
+            VALUES (:recipient_id, :token_hash, 'active', :created_at)"
+        );
+        $management->execute([
+            ':recipient_id' => $recipientId,
+            ':token_hash' => consent_token_hash($managementToken),
+            ':created_at' => $now,
+        ]);
+
+        $supersedeCredentials = $connection->prepare(
+            "UPDATE outbound_messages SET status = 'failed', last_error = 'superseded'
+            WHERE recipient_id = :recipient_id
+                AND message_type = 'consent_credentials' AND status = 'pending'"
+        );
+        $supersedeCredentials->execute([':recipient_id' => $recipientId]);
+
+        $email = consent_decrypt_string((string) $record['email_ciphertext']);
+        queue_consent_message($connection, $recipientId, 'consent_credentials', [
+            'email' => $email,
+            'management_token' => $managementToken,
+            'unsubscribe_token' => $unsubscribeToken,
+        ], $now);
+
+        $connection->commit();
+    } catch (Throwable $e) {
+        if ($connection->inTransaction()) {
+            $connection->rollBack();
+        }
+
+        throw $e;
+    }
+
+    return [
+        'management_token' => $managementToken,
+        'masked_email' => mask_recipient_email($email),
     ];
 }
 
@@ -561,35 +699,116 @@ function rotate_recipient_code(string $managementToken): string
     return $code['formatted'];
 }
 
+function revoke_recipient_records(PDO $connection, int $recipientId, string $now): void
+{
+    $recipient = $connection->prepare(
+        "UPDATE recipients SET status = 'revoked', updated_at = :now, revoked_at = :now
+        WHERE id = :recipient_id"
+    );
+    $recipient->execute([':now' => $now, ':recipient_id' => $recipientId]);
+
+    foreach (['recipient_capabilities', 'recipient_management_tokens'] as $table) {
+        $revoke = $connection->prepare(
+            "UPDATE {$table} SET status = 'revoked', revoked_at = :now
+            WHERE recipient_id = :recipient_id AND status = 'active'"
+        );
+        $revoke->execute([':now' => $now, ':recipient_id' => $recipientId]);
+    }
+
+    $consume = $connection->prepare(
+        'UPDATE consent_challenges SET consumed_at = :now
+        WHERE recipient_id = :recipient_id AND consumed_at IS NULL'
+    );
+    $consume->execute([':now' => $now, ':recipient_id' => $recipientId]);
+
+    $cancelMessages = $connection->prepare(
+        "UPDATE outbound_messages SET status = 'failed', last_error = 'recipient revoked'
+        WHERE recipient_id = :recipient_id AND status = 'pending'"
+    );
+    $cancelMessages->execute([':recipient_id' => $recipientId]);
+}
+
 /** Revoke the recipient, their share code, and all management capabilities. */
 function revoke_recipient_consent(string $managementToken): void
 {
     $management = find_recipient_management($managementToken);
-    $recipientId = $management['recipient_id'];
+    $connection = result_storage_connection();
+    $connection->beginTransaction();
+
+    try {
+        revoke_recipient_records(
+            $connection,
+            (int) $management['recipient_id'],
+            consent_timestamp()
+        );
+        $connection->commit();
+    } catch (Throwable $e) {
+        if ($connection->inTransaction()) {
+            $connection->rollBack();
+        }
+
+        throw $e;
+    }
+}
+
+/** Create a per-message unsubscribe capability for the email-delivery stage. */
+function issue_recipient_unsubscribe_token(int $recipientId): string
+{
+    $connection = result_storage_connection();
+    $active = $connection->prepare("SELECT 1 FROM recipients WHERE id = :id AND status = 'active'");
+    $active->execute([':id' => $recipientId]);
+
+    if ($active->fetchColumn() === false) {
+        throw new RecipientNotActiveException('The recipient is not active.');
+    }
+
+    return insert_unsubscribe_token($connection, $recipientId, consent_timestamp());
+}
+
+function find_recipient_unsubscribe(string $submittedToken): array
+{
+    $token = validate_long_consent_token($submittedToken);
+    $statement = result_storage_connection()->prepare(
+        "SELECT u.id AS unsubscribe_id, r.id AS recipient_id, r.email_ciphertext
+        FROM recipient_unsubscribe_tokens u
+        JOIN recipients r ON r.id = u.recipient_id
+        WHERE u.token_hash = :token_hash AND u.used_at IS NULL AND r.status = 'active'"
+    );
+    $statement->execute([':token_hash' => consent_token_hash($token)]);
+    $record = $statement->fetch();
+
+    if (!is_array($record)) {
+        throw new InvalidConsentTokenException('The unsubscribe link is invalid or has already been used.');
+    }
+
+    return [
+        'unsubscribe_id' => (int) $record['unsubscribe_id'],
+        'recipient_id' => (int) $record['recipient_id'],
+        'masked_email' => mask_recipient_email(consent_decrypt_string((string) $record['email_ciphertext'])),
+    ];
+}
+
+function get_recipient_unsubscribe(string $submittedToken, string $sourceIp): array
+{
+    enforce_consent_rate_limit('unsubscribe-ip', $sourceIp, 20, 3600);
+
+    return find_recipient_unsubscribe($submittedToken);
+}
+
+function revoke_recipient_with_unsubscribe_token(string $submittedToken): void
+{
+    $unsubscribe = find_recipient_unsubscribe($submittedToken);
     $connection = result_storage_connection();
     $now = consent_timestamp();
     $connection->beginTransaction();
 
     try {
-        $recipient = $connection->prepare(
-            "UPDATE recipients SET status = 'revoked', updated_at = :now, revoked_at = :now
-            WHERE id = :recipient_id"
+        $used = $connection->prepare(
+            'UPDATE recipient_unsubscribe_tokens SET used_at = :now
+            WHERE id = :id AND used_at IS NULL'
         );
-        $recipient->execute([':now' => $now, ':recipient_id' => $recipientId]);
-
-        foreach (['recipient_capabilities', 'recipient_management_tokens'] as $table) {
-            $revoke = $connection->prepare(
-                "UPDATE {$table} SET status = 'revoked', revoked_at = :now
-                WHERE recipient_id = :recipient_id AND status = 'active'"
-            );
-            $revoke->execute([':now' => $now, ':recipient_id' => $recipientId]);
-        }
-
-        $consume = $connection->prepare(
-            'UPDATE consent_challenges SET consumed_at = :now
-            WHERE recipient_id = :recipient_id AND consumed_at IS NULL'
-        );
-        $consume->execute([':now' => $now, ':recipient_id' => $recipientId]);
+        $used->execute([':now' => $now, ':id' => $unsubscribe['unsubscribe_id']]);
+        revoke_recipient_records($connection, (int) $unsubscribe['recipient_id'], $now);
         $connection->commit();
     } catch (Throwable $e) {
         if ($connection->inTransaction()) {

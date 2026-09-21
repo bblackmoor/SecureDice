@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         validate_consent_csrf((string) ($_POST['csrf_token'] ?? ''));
         request_recipient_consent($email, consent_source_ip());
         $status = 'success';
-        $message = 'If this address can be enrolled, a confirmation message has been queued. Follow its link within 24 hours.';
+        $message = 'If the address is eligible, Secure Dice has queued an email with a confirmation or management-recovery link. Follow it within 24 hours.';
         $email = '';
     } catch (InvalidArgumentException $e) {
         $status = 'error';
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Recipient opt-in — Secure Dice</title>
+    <title>Recipient email settings — Secure Dice</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
     <meta name="referrer" content="no-referrer">
@@ -60,17 +60,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <h1 class="site-title">Secure Dice</h1>
             <div class="site-badges" aria-label="Status">
                 <span class="badge">Private</span>
-                <span class="badge badge-primary">Recipient Opt-in</span>
+                <span class="badge badge-primary">Recipient Settings</span>
             </div>
         </div>
-        <p class="site-subtitle">Choose whether Secure Dice may send results to your address.</p>
+        <p class="site-subtitle">Opt in, recover your private management link, or return to revoke consent.</p>
     </div>
 </header>
 
 <main>
     <section class="card consent-card" aria-labelledby="consent-title">
-        <h2 id="consent-title">Request a recipient code</h2>
-        <p>Your address is encrypted at rest. It is never included in the code you share with a roller.</p>
+        <h2 id="consent-title">Get or manage a recipient code</h2>
+        <p>Enter your address. New recipients receive an opt-in confirmation; existing recipients receive a replacement management-link request. The response does not reveal whether an address is registered.</p>
+        <p>Your address is encrypted at rest and is never included in the code you share with a roller.</p>
 
         <?php if ($message !== ''): ?>
             <div class="consent-notice is-<?= h($status) ?>" role="<?= $status === 'error' ? 'alert' : 'status' ?>">
@@ -91,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 inputmode="email"
                 required
             >
-            <p class="field-help">The confirmation link expires after 24 hours.</p>
-            <button class="sd2-action-btn primary inline-action" type="submit">Request Confirmation</button>
+            <p class="field-help">The emailed link expires after 24 hours.</p>
+            <button class="sd2-action-btn primary inline-action" type="submit">Email My Private Link</button>
         </form>
     </section>
 

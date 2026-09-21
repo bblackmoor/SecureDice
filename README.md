@@ -75,14 +75,16 @@ Verification links do not depend on the browser session that generated the roll.
 
 The consent system separates a recipient's address from the code they share with a roller:
 
-1. The recipient submits an address on `recipient.php`.
+1. The recipient follows **Get or manage a recipient code** from the main page and submits an address on `recipient.php`.
 2. Secure Dice stores the address encrypted and queues a confirmation message with a single-use link that expires after 24 hours.
-3. Following the link activates consent and displays a random 80-bit recipient code plus a private 256-bit management link. These credentials are shown once; only their SHA-256 hashes are stored.
+3. Following the link activates consent and displays a random 80-bit recipient code plus a private 256-bit management link. The same credentials are placed in an encrypted outbound message so the recipient does not lose them by closing the page. The long-lived credential tables store only SHA-256 hashes.
 4. The recipient can use the private link to rotate the sharing code or revoke consent. Rotation invalidates the old code, and revocation invalidates both the code and management link immediately.
+5. Submitting an already-active address through the same private form queues a one-time management-recovery link. Recovery replaces the old management link without changing the recipient code.
+6. Every credentials message contains a separate unsubscribe capability. The link opens a confirmation page before revocation, preventing automated email scanners from accidentally opting a recipient out. The email-delivery stage can issue a fresh unsubscribe capability for every result message.
 
 Enrollment responses are deliberately generic so they do not disclose whether an address is already enrolled. Keyed fixed-window limits constrain enrollment, confirmation, and management attempts without retaining raw IP addresses. Consent forms use same-site session cookies and CSRF tokens, and consent pages instruct browsers and search engines not to cache or index private values.
 
-This stage records confirmation messages in the encrypted `outbound_messages` queue but does not transmit email. SMTP delivery, retries, and delivery history are implemented in the next stage. Until that is configured, operators can test the domain workflow through the automated consent test, but should not publish `recipient.php` as an active enrollment service.
+This stage records confirmations, recoveries, credentials, and unsubscribe capabilities in the encrypted `outbound_messages` queue but does not transmit email. SMTP delivery, retries, and delivery history are implemented in the next stage. Until that is configured, operators can test the domain workflow through the automated consent test, but should not publish the recipient workflow as an active service.
 
 ## URL Presets
 
