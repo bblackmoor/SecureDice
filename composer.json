@@ -1,0 +1,13 @@
+{
+    "name": "bblackmoor/securedice",
+    "description": "Secure Dice web application",
+    "license": "GPL-3.0-or-later",
+    "require": {
+        "php": ">=8.1",
+        "phpmailer/phpmailer": "^7.0"
+    },
+    "config": {
+        "allow-plugins": {},
+        "sort-packages": true
+    }
+}

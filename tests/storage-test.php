@@ -48,7 +48,7 @@ try {
 
     $connection = result_storage_connection();
     storage_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 3,
+        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 4,
         'The result database schema version was not initialized.'
     );
     $statement = $connection->prepare(

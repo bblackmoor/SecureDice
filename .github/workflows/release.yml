@@ -41,6 +41,10 @@ jobs:
             php "$test_file"
           done
 
+      - name: Install production email dependency
+        shell: bash
+        run: composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+
       - name: Build ZIP
         shell: bash
         run: |

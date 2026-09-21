@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Recipient email settings — Secure Dice</title>
+    <title>Email opt-in settings — Secure Dice</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
     <meta name="referrer" content="no-referrer">
@@ -63,15 +63,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <span class="badge badge-primary">Recipient Settings</span>
             </div>
         </div>
-        <p class="site-subtitle">Opt in, recover your private management link, or return to revoke consent.</p>
+        <p class="site-subtitle">Opt in once, recover your private management link, or return to revoke consent.</p>
     </div>
 </header>
 
 <main>
     <section class="card consent-card" aria-labelledby="consent-title">
-        <h2 id="consent-title">Get or manage a recipient code</h2>
+        <h2 id="consent-title">Opt in or manage consent</h2>
         <p>Enter your address. New recipients receive an opt-in confirmation; existing recipients receive a replacement management-link request. The response does not reveal whether an address is registered.</p>
-        <p>Your address is encrypted at rest and is never included in the code you share with a roller.</p>
+        <p>Your address is encrypted at rest. After confirmation, rollers may address results to you without an account or permanent recipient code.</p>
 
         <?php if ($message !== ''): ?>
             <div class="consent-notice is-<?= h($status) ?>" role="<?= $status === 'error' ? 'alert' : 'status' ?>">

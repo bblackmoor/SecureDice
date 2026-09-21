@@ -57,6 +57,16 @@ try {
         )"
     );
     $legacy->exec(
+        "CREATE TABLE recipient_capabilities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipient_id INTEGER NOT NULL,
+            code_hash TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            revoked_at TEXT
+        )"
+    );
+    $legacy->exec(
         "INSERT INTO recipients
         (email_fingerprint, email_ciphertext, status, created_at, updated_at)
         VALUES ('" . str_repeat('a', 64) . "', 'encrypted', 'pending', '2026-09-21T00:00:00Z', '2026-09-21T00:00:00Z')"
@@ -69,8 +79,13 @@ try {
     $legacy->exec(
         "INSERT INTO outbound_messages
         (message_type, recipient_id, payload_ciphertext, status, available_at, created_at)
-        VALUES ('consent_confirmation', 1, 'encrypted', 'pending',
+        VALUES ('consent_confirmation', 1, 'encrypted', 'sending',
             '2026-09-21T00:00:00Z', '2026-09-21T00:00:00Z')"
+    );
+    $legacy->exec(
+        "INSERT INTO recipient_capabilities
+        (recipient_id, code_hash, status, created_at)
+        VALUES (1, '" . str_repeat('c', 64) . "', 'active', '2026-09-21T00:00:00Z')"
     );
     $legacy->exec('PRAGMA user_version = 2');
     $legacy = null;
@@ -79,8 +94,8 @@ try {
     $connection = result_storage_connection();
 
     migration_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 3,
-        'The version-2 database was not migrated to version 3.'
+        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 4,
+        'The version-2 database was not migrated to version 4.'
     );
     migration_test_assert(
         $connection->query('SELECT purpose FROM consent_challenges WHERE id = 1')->fetchColumn() === 'enroll',
@@ -90,11 +105,15 @@ try {
         (int) $connection->query('SELECT COUNT(*) FROM outbound_messages')->fetchColumn() === 1,
         'The queued confirmation was lost during migration.'
     );
+    migration_test_assert(
+        $connection->query('SELECT status FROM outbound_messages WHERE id = 1')->fetchColumn() === 'pending',
+        'An abandoned legacy queue claim was not released during migration.'
+    );
 
     $insert = $connection->prepare(
         "INSERT INTO outbound_messages
         (message_type, recipient_id, payload_ciphertext, status, available_at, created_at)
-        VALUES ('management_recovery', 1, 'encrypted', 'pending', :now, :now)"
+        VALUES ('result_delivery', 1, 'encrypted', 'pending', :now, :now)"
     );
     $insert->execute([':now' => '2026-09-21T00:00:01Z']);
     migration_test_assert(
@@ -103,6 +122,18 @@ try {
             WHERE type = 'table' AND name = 'recipient_unsubscribe_tokens'"
         )->fetchColumn() === 1,
         'The unsubscribe-token table was not created.'
+    );
+    migration_test_assert(
+        $connection->query('SELECT delivery_mode FROM recipients WHERE id = 1')->fetchColumn() === 'tabletop',
+        'The migrated recipient did not receive the tabletop delivery default.'
+    );
+    migration_test_assert(
+        (int) $connection->query('SELECT COUNT(*) FROM email_delivery_history')->fetchColumn() === 1,
+        'The existing queued message did not receive delivery history.'
+    );
+    migration_test_assert(
+        $connection->query('SELECT status FROM recipient_capabilities WHERE id = 1')->fetchColumn() === 'revoked',
+        'The retired recipient code remained active after migration.'
     );
 
     echo "Storage migration tests passed.\n";

@@ -12,8 +12,8 @@ consent_start_session();
 
 $token = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));
 $management = null;
-$newCode = '';
 $revoked = false;
+$saved = false;
 $error = '';
 $statusCode = 200;
 
@@ -24,8 +24,10 @@ try {
         validate_consent_csrf((string) ($_POST['csrf_token'] ?? ''));
         $action = (string) ($_POST['action'] ?? '');
 
-        if ($action === 'rotate') {
-            $newCode = rotate_recipient_code($token);
+        if ($action === 'frequency') {
+            set_recipient_delivery_mode($token, (string) ($_POST['delivery_mode'] ?? ''));
+            $management = find_recipient_management($token);
+            $saved = true;
         } elseif ($action === 'revoke') {
             revoke_recipient_consent($token);
             $revoked = true;
@@ -76,7 +78,7 @@ http_response_code($statusCode);
                 <span class="badge badge-primary">Consent Management</span>
             </div>
         </div>
-        <p class="site-subtitle">Rotate your recipient code or withdraw consent immediately.</p>
+        <p class="site-subtitle">Choose an email frequency, pause delivery, or withdraw consent immediately.</p>
     </div>
 </header>
 
@@ -84,18 +86,14 @@ http_response_code($statusCode);
     <section class="card consent-card" aria-labelledby="management-title">
         <?php if ($revoked): ?>
             <h2 id="management-title">Consent revoked</h2>
-            <div class="consent-notice is-success" role="status">Your recipient code and this management link no longer work.</div>
+            <div class="consent-notice is-success" role="status">Your consent and this management link no longer work.</div>
             <p>You may opt in again later with a new confirmation.</p>
         <?php elseif (is_array($management)): ?>
             <h2 id="management-title">Manage consent</h2>
             <p>Recipient: <strong><?= h($management['masked_email']) ?></strong></p>
 
-            <?php if ($newCode !== ''): ?>
-                <div class="consent-notice is-success" role="status">Your previous code was revoked. Save the replacement now; it cannot be shown again.</div>
-                <div class="secret-row">
-                    <code class="secret-value"><?= h($newCode) ?></code>
-                    <button class="sd2-action-btn neutral inline-action" type="button" data-copy="<?= h($newCode) ?>">Copy Code</button>
-                </div>
+            <?php if ($saved): ?>
+                <div class="consent-notice is-success" role="status">Your email setting has been saved.</div>
             <?php endif; ?>
 
             <?php if ($error !== ''): ?>
@@ -106,11 +104,17 @@ http_response_code($statusCode);
                 <form method="post" action="manage-recipient.php">
                     <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
                     <input type="hidden" name="token" value="<?= h($token) ?>">
-                    <input type="hidden" name="action" value="rotate">
-                    <button class="sd2-action-btn primary inline-action" type="submit">Rotate Recipient Code</button>
+                    <input type="hidden" name="action" value="frequency">
+                    <label for="delivery-mode">Result-email frequency</label>
+                    <select id="delivery-mode" name="delivery_mode">
+                        <option value="tabletop" <?= $management['delivery_mode'] === 'tabletop' ? 'selected' : '' ?>>Tabletop session — up to 150/hour, 1,000/day</option>
+                        <option value="occasional" <?= $management['delivery_mode'] === 'occasional' ? 'selected' : '' ?>>Occasional — up to 20/hour, 100/day</option>
+                        <option value="paused" <?= $management['delivery_mode'] === 'paused' ? 'selected' : '' ?>>Paused — no result email</option>
+                    </select>
+                    <button class="sd2-action-btn primary inline-action" type="submit">Save Email Setting</button>
                 </form>
 
-                <form method="post" action="manage-recipient.php" onsubmit="return window.confirm('Revoke this recipient and all of its codes?');">
+                <form method="post" action="manage-recipient.php" onsubmit="return window.confirm('Revoke this address and stop all Secure Dice email?');">
                     <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
                     <input type="hidden" name="token" value="<?= h($token) ?>">
                     <input type="hidden" name="action" value="revoke">
@@ -120,7 +124,7 @@ http_response_code($statusCode);
         <?php else: ?>
             <h2 id="management-title">Management unavailable</h2>
             <div class="consent-notice is-error" role="alert"><?= h($error) ?></div>
-            <p>The link may be invalid, rotated, or revoked.</p>
+            <p>The link may be invalid, replaced, or revoked.</p>
         <?php endif; ?>
     </section>
 </main>

@@ -6,6 +6,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/results-functions.php';
 require_once __DIR__ . '/storage.php';
+require_once __DIR__ . '/consent.php';
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
 
 if (!isset($data, $canonicalJson, $resultViewMode) || !is_array($data)) {
     throw new RuntimeException('Result view data was not provided.');
@@ -169,6 +174,28 @@ $showLimit = 200;
         <b>Verification link:</b><br>
         <a href="<?= h($verificationPath) ?>"><code><?= h($verificationUrl) ?></code></a>
     </p>
+</section>
+
+<section class="card email-result-card" aria-labelledby="email-result-title">
+    <h2 id="email-result-title">Email this result</h2>
+    <p>Enter up to 10 recipient email addresses, separated by spaces, commas, or new lines. Secure Dice sends only to addresses that have confirmed their opt-in.</p>
+    <form class="email-result-form" method="post" action="email-result.php">
+        <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
+        <input type="hidden" name="result_id" value="<?= h($resultId) ?>">
+        <label for="result-recipients">Recipient email addresses</label>
+        <textarea
+            id="result-recipients"
+            name="recipients"
+            rows="4"
+            maxlength="3000"
+            autocomplete="off"
+            spellcheck="false"
+            required
+            aria-describedby="result-recipients-help"
+        ></textarea>
+        <p id="result-recipients-help" class="field-help">No recipient names or addresses are disclosed in delivery notices.</p>
+        <button class="sd2-action-btn primary inline-action" type="submit">Queue Result Email</button>
+    </form>
 </section>
 
 <div class="card">

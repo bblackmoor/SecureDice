@@ -12,7 +12,8 @@ Secure Dice is a free, account-free online dice roller for tabletop roleplaying 
 - **Readable results:** Results show individual dice, dropped and special dice, modifiers, arithmetic, final totals, and summary statistics.
 - **Authenticated records:** Every completed roll is stored under a random 128-bit result ID and can be verified against the server's immutable copy.
 - **Portable records:** Copy or download the exact canonical result data as JSON.
-- **Recipient consent:** Email recipients opt in before receiving a private, revocable sharing code.
+- **Recipient consent:** Email recipients confirm once and can pause, manage, or revoke delivery without an account.
+- **Queued email delivery:** Stored results are sent through authenticated SMTP with batching, retries, delivery history, and per-message unsubscribe links.
 
 Secure Dice is available at [RPG Library](https://www.rpglibrary.org/software/securedice/).
 
@@ -62,6 +63,7 @@ The results page also provides:
 - Canonical JSON containing the specification, generated time, individual dice, and totals.
 - A permanent verification link and random result ID.
 - Buttons for opening the verified record and copying its link or canonical JSON.
+- A form for emailing the result to as many as 10 independently opted-in addresses.
 
 ## Result Verification
 
@@ -71,20 +73,24 @@ Successful verification establishes that the result is the record retained by th
 
 Verification links do not depend on the browser session that generated the roll. Verified canonical JSON can also be downloaded from the verification page.
 
-## Recipient Consent
+## Recipient Consent and Result Email
 
-The consent system separates a recipient's address from the code they share with a roller:
+An address must confirm its opt-in once before Secure Dice will send results to it:
 
-1. The recipient follows **Get or manage a recipient code** from the main page and submits an address on `recipient.php`.
-2. Secure Dice stores the address encrypted and queues a confirmation message with a single-use link that expires after 24 hours.
-3. Following the link activates consent and displays a random 80-bit recipient code plus a private 256-bit management link. The same credentials are placed in an encrypted outbound message so the recipient does not lose them by closing the page. The long-lived credential tables store only SHA-256 hashes.
-4. The recipient can use the private link to rotate the sharing code or revoke consent. Rotation invalidates the old code, and revocation invalidates both the code and management link immediately.
-5. Submitting an already-active address through the same private form queues a one-time management-recovery link. Recovery replaces the old management link without changing the recipient code.
-6. Every credentials message contains a separate unsubscribe capability. The link opens a confirmation page before revocation, preventing automated email scanners from accidentally opting a recipient out. The email-delivery stage can issue a fresh unsubscribe capability for every result message.
+1. The recipient follows **Opt in to result email or manage consent** and submits an address on `recipient.php`.
+2. Secure Dice stores the address encrypted and emails a single-use confirmation link that expires after 24 hours.
+3. Confirmation activates the address and provides a private management link. No permanent recipient code is required.
+4. A roller enters up to 10 addresses on a stored result page. Secure Dice silently queues only active, available recipients and gives the roller a generic response.
+5. Result email includes readable roll arithmetic, the authoritative verification link, aggregate recipient counts, and a per-message unsubscribe link.
+6. The management link can select **Tabletop session**, **Occasional**, or **Paused** delivery, or revoke consent immediately. Submitting an active address on the opt-in form emails a replacement management link.
 
-Enrollment responses are deliberately generic so they do not disclose whether an address is already enrolled. Keyed fixed-window limits constrain enrollment, confirmation, and management attempts without retaining raw IP addresses. Consent forms use same-site session cookies and CSRF tokens, and consent pages instruct browsers and search engines not to cache or index private values.
+No custom subject, sender identity, or message text is accepted. Non-opted-in addresses receive nothing. Delivered messages report only aggregate counts—for example, that eight of ten intended recipients were opted in—without naming or listing another recipient.
 
-This stage records confirmations, recoveries, credentials, and unsubscribe capabilities in the encrypted `outbound_messages` queue but does not transmit email. SMTP delivery, retries, and delivery history are implemented in the next stage. Until that is configured, operators can test the domain workflow through the automated consent test, but should not publish the recipient workflow as an active service.
+Enrollment and result-request responses are deliberately generic. Raw addresses and IP addresses are not retained for lookup or rate limiting: addresses are encrypted with keyed fingerprints, and rate buckets use keyed hashes. Consent and email forms use CSRF protection, private no-store responses, and same-site cookies.
+
+Tabletop delivery permits 20 results per 10 minutes, 150 per hour, and 1,000 per day per recipient. Occasional delivery permits 10 per 10 minutes, 20 per hour, and 100 per day. Sender IPs are limited to 300 submissions per hour, mixed opted-in/non-opted-in groups receive separate throttling, duplicate result-recipient pairs are suppressed for 60 seconds, and SMTP output is capped at 60 messages per minute and 500 per hour. Nearby results for the same recipient are held briefly and combined, up to 20 results per message.
+
+The command-line queue worker atomically claims messages, rechecks consent before sending, retries temporary failures with increasing delays, stops after five attempts, records sanitized delivery history, and purges encrypted message payloads after success or permanent failure.
 
 ## URL Presets
 
@@ -117,6 +123,7 @@ Place the repository files in a PHP-enabled web directory and direct users to `s
 Secure Dice requires:
 
 - PHP with `random_int()`, session support, Sodium, PDO, and the PDO SQLite driver.
+- Composer for source installations. Release ZIPs already include production dependencies.
 - A web server capable of running PHP.
 - Browser cookies for the short-lived session that transfers a roll to its results page.
 - A writable directory for the SQLite result database.
@@ -141,14 +148,46 @@ SECUREDICE_SECRET=<64 hexadecimal characters>
 
 Never commit this value. Back it up as carefully as the database and do not rotate it casually: it keys address encryption, private fingerprints, and rate-limit buckets, so replacing it makes existing encrypted recipient records unusable. The result-verification feature does not require this secret.
 
+Install PHPMailer when deploying directly from a source checkout:
+
+```shell
+composer install --no-dev --optimize-autoloader
+```
+
+Configure the public application URL and authenticated SMTP transport:
+
+```text
+SECUREDICE_BASE_URL=https://www.example.com/securedice
+SECUREDICE_SMTP_HOST=smtp.example.com
+SECUREDICE_SMTP_PORT=587
+SECUREDICE_SMTP_ENCRYPTION=starttls
+SECUREDICE_SMTP_USERNAME=securedice@example.com
+SECUREDICE_SMTP_PASSWORD=<secret>
+SECUREDICE_SMTP_FROM_ADDRESS=securedice@example.com
+SECUREDICE_SMTP_FROM_NAME=Secure Dice
+SECUREDICE_SMTP_TIMEOUT=15
+```
+
+`SECUREDICE_SMTP_ENCRYPTION` accepts `starttls`, `smtps`, or `none`. Unencrypted SMTP is accepted only for a relay on localhost. Configure SPF, DKIM, and DMARC for the sender domain.
+
+Run the queue worker every minute with cron. It is safe to run multiple workers because queue claims use leases:
+
+```cron
+* * * * * cd /absolute/path/to/securedice && /usr/bin/php bin/process-email-queue.php --limit=100
+```
+
+The worker logs operational details to the PHP error log without returning SMTP errors, addresses, passwords, or private tokens to site visitors.
+
 Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, and a SHA-256 integrity digest. They are insert-only; a database trigger prevents an existing result from being changed. Database files and SQLite sidecar files are restricted to the PHP process owner when the host permits permission changes.
 
-To run the storage, verification, and consent tests:
+To run the storage, verification, consent, and email tests:
 
 ```shell
 php tests/storage-test.php
 php tests/verification-test.php
 php tests/consent-test.php
+php tests/email-test.php
+php tests/storage-migration-test.php
 ```
 
 ## Versioning

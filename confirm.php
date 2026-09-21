@@ -58,7 +58,7 @@ $managementUrl = is_array($result)
                 <span class="badge badge-primary">Recipient Opt-in</span>
             </div>
         </div>
-        <p class="site-subtitle">Confirm control of your address and receive private recipient credentials.</p>
+        <p class="site-subtitle">Confirm control of your address and choose to receive Secure Dice results.</p>
     </div>
 </header>
 
@@ -68,18 +68,11 @@ $managementUrl = is_array($result)
             <h2 id="confirmation-title">Recipient confirmed</h2>
             <p><strong><?= h($result['masked_email']) ?></strong> can now receive Secure Dice results.</p>
             <div class="consent-notice is-success" role="status">
-                Save both values now. A credentials message has also been queued so closing this page will not permanently lose them.
-            </div>
-
-            <h3>Recipient code</h3>
-            <p>Share this code with people you permit to email results to you.</p>
-            <div class="secret-row">
-                <code class="secret-value"><?= h($result['recipient_code']) ?></code>
-                <button class="sd2-action-btn neutral inline-action" type="button" data-copy="<?= h($result['recipient_code']) ?>">Copy Code</button>
+                Your private management link has also been queued for delivery, so you can recover it later.
             </div>
 
             <h3>Private management link</h3>
-            <p>Keep this link private. It can rotate your code or revoke consent immediately.</p>
+            <p>Keep this link private. It can pause email, change delivery limits, or revoke consent immediately.</p>
             <div class="secret-row">
                 <code class="secret-value secret-url"><?= h($managementUrl) ?></code>
                 <button class="sd2-action-btn neutral inline-action" type="button" data-copy="<?= h($managementUrl) ?>">Copy Link</button>

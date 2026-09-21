@@ -239,6 +239,19 @@ body {
     margin: 0;
 }
 
+.email-result-card {
+    max-width: 760px;
+}
+
+.email-result-form {
+    max-width: 680px;
+}
+
+.email-result-form textarea {
+    min-height: 7rem;
+    resize: vertical;
+}
+
 /* Form elements */
 
 label {

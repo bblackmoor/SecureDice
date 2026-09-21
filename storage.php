@@ -100,7 +100,7 @@ function initialize_result_storage(PDO $connection): void
 {
     $storageSchemaVersion = (int) $connection->query('PRAGMA user_version')->fetchColumn();
 
-    if ($storageSchemaVersion > 3) {
+    if ($storageSchemaVersion > 4) {
         throw new RuntimeException('The result database uses a newer schema.');
     }
 
@@ -248,7 +248,8 @@ function initialize_result_storage(PDO $connection): void
                 'INSERT INTO outbound_messages_v3
                 (id, message_type, recipient_id, payload_ciphertext, status, attempts,
                     available_at, created_at, sent_at, last_error)
-                SELECT id, message_type, recipient_id, payload_ciphertext, status, attempts,
+                SELECT id, message_type, recipient_id, payload_ciphertext,
+                    CASE WHEN status = \'sending\' THEN \'pending\' ELSE status END, attempts,
                     available_at, created_at, sent_at, last_error
                 FROM outbound_messages'
             );
@@ -276,6 +277,126 @@ function initialize_result_storage(PDO $connection): void
             );
 
             $connection->exec('PRAGMA user_version = 3');
+        }
+
+        if ($storageSchemaVersion < 4) {
+            $connection->exec(
+                "ALTER TABLE recipients
+                ADD COLUMN delivery_mode TEXT NOT NULL DEFAULT 'tabletop'
+                CHECK (delivery_mode IN ('tabletop', 'occasional', 'paused'))"
+            );
+
+            $connection->exec(
+                'CREATE TABLE email_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    public_id TEXT NOT NULL UNIQUE CHECK (length(public_id) = 32),
+                    result_id TEXT NOT NULL,
+                    source_bucket TEXT NOT NULL CHECK (length(source_bucket) = 64),
+                    intended_count INTEGER NOT NULL,
+                    opted_in_count INTEGER NOT NULL,
+                    not_opted_in_count INTEGER NOT NULL,
+                    not_queued_count INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (result_id) REFERENCES result_records(public_id)
+                )'
+            );
+
+            $connection->exec(
+                "CREATE TABLE outbound_messages_v4 (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_type TEXT NOT NULL CHECK (
+                        message_type IN (
+                            'consent_confirmation', 'management_recovery',
+                            'consent_credentials', 'result_delivery'
+                        )
+                    ),
+                    recipient_id INTEGER NOT NULL,
+                    request_id INTEGER,
+                    result_id TEXT,
+                    payload_ciphertext TEXT,
+                    status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    available_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    claimed_at TEXT,
+                    lease_token TEXT,
+                    sent_at TEXT,
+                    last_error TEXT,
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE,
+                    FOREIGN KEY (request_id) REFERENCES email_requests(id),
+                    FOREIGN KEY (result_id) REFERENCES result_records(public_id)
+                )"
+            );
+            $connection->exec(
+                'INSERT INTO outbound_messages_v4
+                (id, message_type, recipient_id, payload_ciphertext, status, attempts,
+                    available_at, created_at, sent_at, last_error)
+                SELECT id, message_type, recipient_id, payload_ciphertext,
+                    CASE WHEN status = \'sending\' THEN \'pending\' ELSE status END, attempts,
+                    available_at, created_at, sent_at, last_error
+                FROM outbound_messages'
+            );
+            $connection->exec('DROP TABLE outbound_messages');
+            $connection->exec('ALTER TABLE outbound_messages_v4 RENAME TO outbound_messages');
+
+            $connection->exec(
+                "CREATE TABLE email_delivery_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_id INTEGER NOT NULL,
+                    request_id INTEGER,
+                    recipient_id INTEGER NOT NULL,
+                    result_id TEXT,
+                    message_type TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK (status IN ('queued', 'retrying', 'sent', 'failed', 'cancelled')),
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    queued_at TEXT NOT NULL,
+                    last_attempt_at TEXT,
+                    delivered_at TEXT,
+                    error_category TEXT,
+                    provider_message_id TEXT,
+                    UNIQUE (message_id),
+                    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE,
+                    FOREIGN KEY (request_id) REFERENCES email_requests(id),
+                    FOREIGN KEY (result_id) REFERENCES result_records(public_id)
+                )"
+            );
+            $connection->exec(
+                "INSERT INTO email_delivery_history
+                (message_id, recipient_id, message_type, status, attempt_count,
+                    queued_at, delivered_at, error_category)
+                SELECT id, recipient_id, message_type,
+                    CASE
+                        WHEN status = 'sent' THEN 'sent'
+                        WHEN status = 'failed' THEN 'failed'
+                        ELSE 'queued'
+                    END,
+                    attempts, created_at, sent_at,
+                    CASE WHEN status = 'failed' THEN 'legacy' ELSE NULL END
+                FROM outbound_messages"
+            );
+
+            $connection->exec(
+                'CREATE INDEX outbound_messages_pending
+                ON outbound_messages(status, available_at)'
+            );
+            $connection->exec(
+                'CREATE INDEX outbound_messages_recipient_batch
+                ON outbound_messages(recipient_id, message_type, status, created_at)'
+            );
+            $connection->exec(
+                'CREATE INDEX email_history_recipient
+                ON email_delivery_history(recipient_id, queued_at)'
+            );
+
+            // Schema 4 replaces permanent recipient share codes with direct,
+            // server-side address lookup after one-time opt-in confirmation.
+            $connection->exec(
+                "UPDATE recipient_capabilities
+                SET status = 'revoked', revoked_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                WHERE status = 'active'"
+            );
+
+            $connection->exec('PRAGMA user_version = 4');
         }
 
         $connection->commit();

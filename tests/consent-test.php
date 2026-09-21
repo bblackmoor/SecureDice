@@ -37,7 +37,7 @@ try {
 
     $connection = result_storage_connection();
     consent_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 3,
+        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 4,
         'The consent schema was not initialized.'
     );
 
@@ -73,10 +73,6 @@ try {
 
     $confirmed = confirm_recipient_consent($confirmationToken, '192.0.2.10');
     consent_test_assert(
-        preg_match('/^[a-f0-9]{5}(?:-[a-f0-9]{5}){3}$/', $confirmed['recipient_code']) === 1,
-        'The recipient code format is invalid.'
-    );
-    consent_test_assert(
         preg_match('/^[A-Za-z0-9_-]{43}$/', $confirmed['management_token']) === 1,
         'The management token format is invalid.'
     );
@@ -99,14 +95,6 @@ try {
         'A raw confirmation token was retained in the database.'
     );
     consent_test_assert(
-        strpos($rawDatabase, $confirmed['recipient_code']) === false,
-        'A raw recipient code was retained in the database.'
-    );
-    consent_test_assert(
-        strpos($rawDatabase, str_replace('-', '', $confirmed['recipient_code'])) === false,
-        'A normalized raw recipient code was retained in the database.'
-    );
-    consent_test_assert(
         strpos($rawDatabase, $confirmed['management_token']) === false,
         'A raw management token was retained in the database.'
     );
@@ -117,25 +105,17 @@ try {
         'A one-time confirmation token was accepted twice.'
     );
 
-    $resolved = resolve_recipient_code($confirmed['recipient_code']);
-    consent_test_assert(is_array($resolved), 'The active recipient code did not resolve.');
-    consent_test_assert(
-        $resolved['email'] === 'player.example@example.com',
-        'The active recipient code resolved to the wrong address.'
-    );
-    consent_test_assert(resolve_recipient_code('not-a-code') === null, 'A malformed code resolved.');
-
     $management = get_recipient_management($confirmed['management_token'], '192.0.2.10');
     consent_test_assert(
         $management['masked_email'] === 'p********@example.com',
         'The management capability returned the wrong recipient.'
     );
 
-    $oldCode = $confirmed['recipient_code'];
-    $newCode = rotate_recipient_code($confirmed['management_token']);
-    consent_test_assert($newCode !== $oldCode, 'Code rotation did not create a new code.');
-    consent_test_assert(resolve_recipient_code($oldCode) === null, 'The prior code survived rotation.');
-    consent_test_assert(is_array(resolve_recipient_code($newCode)), 'The replacement code is inactive.');
+    set_recipient_delivery_mode($confirmed['management_token'], 'occasional');
+    consent_test_assert(
+        find_recipient_management($confirmed['management_token'])['delivery_mode'] === 'occasional',
+        'The recipient email-frequency setting was not saved.'
+    );
 
     $duplicate = request_recipient_consent('player.example@example.com', '192.0.2.10');
     consent_test_assert($duplicate['accepted'] === true, 'An active enrollment was not accepted generically.');
@@ -185,7 +165,6 @@ try {
     );
 
     revoke_recipient_with_unsubscribe_token($unsubscribeToken);
-    consent_test_assert(resolve_recipient_code($newCode) === null, 'A recipient code survived revocation.');
     consent_test_assert(
         (int) $connection->query("SELECT COUNT(*) FROM outbound_messages WHERE status = 'pending'")->fetchColumn() === 0,
         'Pending messages survived recipient revocation.'
@@ -215,8 +194,8 @@ try {
     );
     revoke_recipient_consent($confirmedAgain['management_token']);
     consent_test_assert(
-        resolve_recipient_code($confirmedAgain['recipient_code']) === null,
-        'Management-link revocation did not disable the recipient code.'
+        $connection->query("SELECT status FROM recipients LIMIT 1")->fetchColumn() === 'revoked',
+        'Management-link revocation did not revoke the recipient.'
     );
 
     consent_test_assert(

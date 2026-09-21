@@ -171,32 +171,6 @@ function generate_long_consent_token(): string
     return consent_base64url_encode(random_bytes(32));
 }
 
-function normalize_recipient_code(string $code): string
-{
-    $normalized = strtolower(str_replace(['-', ' '], '', trim($code)));
-
-    if (preg_match('/^[a-f0-9]{20}$/', $normalized) !== 1) {
-        throw new InvalidConsentTokenException('The recipient code is invalid.');
-    }
-
-    return $normalized;
-}
-
-function format_recipient_code(string $normalized): string
-{
-    return implode('-', str_split($normalized, 5));
-}
-
-function generate_recipient_code(): array
-{
-    $normalized = bin2hex(random_bytes(10));
-
-    return [
-        'normalized' => $normalized,
-        'formatted' => format_recipient_code($normalized),
-    ];
-}
-
 function mask_recipient_email(string $email): string
 {
     [$local, $domain] = array_pad(explode('@', $email, 2), 2, '');
@@ -317,6 +291,19 @@ function queue_consent_message(
         ':available_at' => $now,
         ':created_at' => $now,
     ]);
+
+    $messageId = (int) $connection->lastInsertId();
+    $history = $connection->prepare(
+        "INSERT INTO email_delivery_history
+        (message_id, recipient_id, message_type, status, queued_at)
+        VALUES (:message_id, :recipient_id, :message_type, 'queued', :queued_at)"
+    );
+    $history->execute([
+        ':message_id' => $messageId,
+        ':recipient_id' => $recipientId,
+        ':message_type' => $messageType,
+        ':queued_at' => $now,
+    ]);
 }
 
 function insert_unsubscribe_token(PDO $connection, int $recipientId, string $now): string
@@ -334,6 +321,22 @@ function insert_unsubscribe_token(PDO $connection, int $recipientId, string $now
     ]);
 
     return $token;
+}
+
+function mark_superseded_history(PDO $connection, int $recipientId, string $messageType): void
+{
+    $history = $connection->prepare(
+        "UPDATE email_delivery_history SET status = 'cancelled', error_category = 'superseded'
+        WHERE message_id IN (
+            SELECT id FROM outbound_messages
+            WHERE recipient_id = :recipient_id AND message_type = :message_type
+                AND status = 'failed' AND last_error = 'superseded'
+        ) AND status IN ('queued', 'retrying')"
+    );
+    $history->execute([
+        ':recipient_id' => $recipientId,
+        ':message_type' => $messageType,
+    ]);
 }
 
 /**
@@ -405,7 +408,7 @@ function request_recipient_consent(string $submittedEmail, string $sourceIp): ar
 
         $supersede = $connection->prepare(
             "UPDATE outbound_messages
-            SET status = 'failed', last_error = 'superseded'
+            SET status = 'failed', last_error = 'superseded', payload_ciphertext = NULL
             WHERE recipient_id = :recipient_id AND message_type = :message_type
                 AND status = 'pending'"
         );
@@ -413,6 +416,7 @@ function request_recipient_consent(string $submittedEmail, string $sourceIp): ar
             ':recipient_id' => $recipientId,
             ':message_type' => $messageType,
         ]);
+        mark_superseded_history($connection, $recipientId, $messageType);
 
         $challenge = $connection->prepare(
             'INSERT INTO consent_challenges
@@ -473,7 +477,6 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
         }
 
         $recipientId = (int) $record['recipient_id'];
-        $code = generate_recipient_code();
         $managementToken = generate_long_consent_token();
         $unsubscribeToken = insert_unsubscribe_token($connection, $recipientId, $now);
 
@@ -497,17 +500,6 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
             $revoke->execute([':now' => $now, ':recipient_id' => $recipientId]);
         }
 
-        $capability = $connection->prepare(
-            "INSERT INTO recipient_capabilities
-            (recipient_id, code_hash, status, created_at)
-            VALUES (:recipient_id, :code_hash, 'active', :created_at)"
-        );
-        $capability->execute([
-            ':recipient_id' => $recipientId,
-            ':code_hash' => consent_token_hash($code['normalized']),
-            ':created_at' => $now,
-        ]);
-
         $management = $connection->prepare(
             "INSERT INTO recipient_management_tokens
             (recipient_id, token_hash, status, created_at)
@@ -520,15 +512,16 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
         ]);
 
         $supersedeCredentials = $connection->prepare(
-            "UPDATE outbound_messages SET status = 'failed', last_error = 'superseded'
+            "UPDATE outbound_messages SET status = 'failed', last_error = 'superseded',
+                payload_ciphertext = NULL
             WHERE recipient_id = :recipient_id
                 AND message_type = 'consent_credentials' AND status = 'pending'"
         );
         $supersedeCredentials->execute([':recipient_id' => $recipientId]);
+        mark_superseded_history($connection, $recipientId, 'consent_credentials');
 
         queue_consent_message($connection, $recipientId, 'consent_credentials', [
             'email' => consent_decrypt_string((string) $record['email_ciphertext']),
-            'recipient_code' => $code['formatted'],
             'management_token' => $managementToken,
             'unsubscribe_token' => $unsubscribeToken,
         ], $now);
@@ -543,7 +536,6 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
     }
 
     return [
-        'recipient_code' => $code['formatted'],
         'management_token' => $managementToken,
         'masked_email' => mask_recipient_email(consent_decrypt_string((string) $record['email_ciphertext'])),
     ];
@@ -603,11 +595,13 @@ function recover_recipient_management(string $submittedToken, string $sourceIp):
         ]);
 
         $supersedeCredentials = $connection->prepare(
-            "UPDATE outbound_messages SET status = 'failed', last_error = 'superseded'
+            "UPDATE outbound_messages SET status = 'failed', last_error = 'superseded',
+                payload_ciphertext = NULL
             WHERE recipient_id = :recipient_id
                 AND message_type = 'consent_credentials' AND status = 'pending'"
         );
         $supersedeCredentials->execute([':recipient_id' => $recipientId]);
+        mark_superseded_history($connection, $recipientId, 'consent_credentials');
 
         $email = consent_decrypt_string((string) $record['email_ciphertext']);
         queue_consent_message($connection, $recipientId, 'consent_credentials', [
@@ -636,7 +630,7 @@ function find_recipient_management(string $submittedToken): array
 {
     $token = validate_long_consent_token($submittedToken);
     $statement = result_storage_connection()->prepare(
-        "SELECT r.id, r.email_ciphertext
+        "SELECT r.id, r.email_ciphertext, r.delivery_mode
         FROM recipient_management_tokens m
         JOIN recipients r ON r.id = m.recipient_id
         WHERE m.token_hash = :token_hash AND m.status = 'active' AND r.status = 'active'"
@@ -651,6 +645,7 @@ function find_recipient_management(string $submittedToken): array
     return [
         'recipient_id' => (int) $record['id'],
         'masked_email' => mask_recipient_email(consent_decrypt_string((string) $record['email_ciphertext'])),
+        'delivery_mode' => (string) $record['delivery_mode'],
     ];
 }
 
@@ -661,42 +656,22 @@ function get_recipient_management(string $submittedToken, string $sourceIp): arr
     return find_recipient_management($submittedToken);
 }
 
-/** Revoke the prior code and return a replacement that is shown once. */
-function rotate_recipient_code(string $managementToken): string
+function set_recipient_delivery_mode(string $managementToken, string $deliveryMode): void
 {
-    $management = find_recipient_management($managementToken);
-    $recipientId = $management['recipient_id'];
-    $connection = result_storage_connection();
-    $now = consent_timestamp();
-    $code = generate_recipient_code();
-    $connection->beginTransaction();
-
-    try {
-        $revoke = $connection->prepare(
-            "UPDATE recipient_capabilities SET status = 'revoked', revoked_at = :now
-            WHERE recipient_id = :recipient_id AND status = 'active'"
-        );
-        $revoke->execute([':now' => $now, ':recipient_id' => $recipientId]);
-        $insert = $connection->prepare(
-            "INSERT INTO recipient_capabilities
-            (recipient_id, code_hash, status, created_at)
-            VALUES (:recipient_id, :code_hash, 'active', :created_at)"
-        );
-        $insert->execute([
-            ':recipient_id' => $recipientId,
-            ':code_hash' => consent_token_hash($code['normalized']),
-            ':created_at' => $now,
-        ]);
-        $connection->commit();
-    } catch (Throwable $e) {
-        if ($connection->inTransaction()) {
-            $connection->rollBack();
-        }
-
-        throw $e;
+    if (!in_array($deliveryMode, ['tabletop', 'occasional', 'paused'], true)) {
+        throw new InvalidArgumentException('Choose a valid email frequency.');
     }
 
-    return $code['formatted'];
+    $management = find_recipient_management($managementToken);
+    $statement = result_storage_connection()->prepare(
+        'UPDATE recipients SET delivery_mode = :delivery_mode, updated_at = :updated_at
+        WHERE id = :recipient_id AND status = \'active\''
+    );
+    $statement->execute([
+        ':delivery_mode' => $deliveryMode,
+        ':updated_at' => consent_timestamp(),
+        ':recipient_id' => $management['recipient_id'],
+    ]);
 }
 
 function revoke_recipient_records(PDO $connection, int $recipientId, string $now): void
@@ -722,13 +697,20 @@ function revoke_recipient_records(PDO $connection, int $recipientId, string $now
     $consume->execute([':now' => $now, ':recipient_id' => $recipientId]);
 
     $cancelMessages = $connection->prepare(
-        "UPDATE outbound_messages SET status = 'failed', last_error = 'recipient revoked'
+        "UPDATE outbound_messages SET status = 'failed', last_error = 'recipient revoked',
+            payload_ciphertext = NULL
         WHERE recipient_id = :recipient_id AND status = 'pending'"
     );
     $cancelMessages->execute([':recipient_id' => $recipientId]);
+
+    $cancelHistory = $connection->prepare(
+        "UPDATE email_delivery_history SET status = 'cancelled', error_category = 'recipient_revoked'
+        WHERE recipient_id = :recipient_id AND status IN ('queued', 'retrying')"
+    );
+    $cancelHistory->execute([':recipient_id' => $recipientId]);
 }
 
-/** Revoke the recipient, their share code, and all management capabilities. */
+/** Revoke the recipient and all management capabilities. */
 function revoke_recipient_consent(string $managementToken): void
 {
     $management = find_recipient_management($managementToken);
@@ -751,7 +733,7 @@ function revoke_recipient_consent(string $managementToken): void
     }
 }
 
-/** Create a per-message unsubscribe capability for the email-delivery stage. */
+/** Create a per-message unsubscribe capability for an outgoing email. */
 function issue_recipient_unsubscribe_token(int $recipientId): string
 {
     $connection = result_storage_connection();
@@ -817,32 +799,4 @@ function revoke_recipient_with_unsubscribe_token(string $submittedToken): void
 
         throw $e;
     }
-}
-
-/** Resolve a shareable recipient code only while its owner remains opted in. */
-function resolve_recipient_code(string $submittedCode): ?array
-{
-    try {
-        $code = normalize_recipient_code($submittedCode);
-    } catch (InvalidConsentTokenException $e) {
-        return null;
-    }
-
-    $statement = result_storage_connection()->prepare(
-        "SELECT r.id, r.email_ciphertext
-        FROM recipient_capabilities c
-        JOIN recipients r ON r.id = c.recipient_id
-        WHERE c.code_hash = :code_hash AND c.status = 'active' AND r.status = 'active'"
-    );
-    $statement->execute([':code_hash' => consent_token_hash($code)]);
-    $record = $statement->fetch();
-
-    if (!is_array($record)) {
-        return null;
-    }
-
-    return [
-        'recipient_id' => (int) $record['id'],
-        'email' => consent_decrypt_string((string) $record['email_ciphertext']),
-    ];
 }
