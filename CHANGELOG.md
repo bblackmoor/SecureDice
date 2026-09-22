@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.51
+
+- Removed the one-time release-history cleanup after retaining `v2.0.49` as the sole permanent Release and preserving all historical Git tags.
+
 ## 2.0.50
 
 - Added 90-day development ZIP artifacts for every commit to `main`, identified by version and short commit SHA.

@@ -112,16 +112,3 @@ jobs:
               --title "Secure Dice $VERSION" \
               --generate-notes
           fi
-
-      - name: Remove superseded release entries
-        if: github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Separate development and release packages'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh release list --limit 100 --json tagName --jq '.[].tagName' |
-            while IFS= read -r TAG; do
-              if [ "$TAG" != "v2.0.49" ]; then
-                gh release delete "$TAG" --yes
-              fi
-            done
