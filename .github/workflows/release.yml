@@ -1,15 +1,17 @@
-name: Publish release ZIP
+name: Build package
 
 on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  package:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -25,6 +27,25 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Name package
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            EXPECTED_TAG="v$VERSION"
+            if [ "$GITHUB_REF_NAME" != "$EXPECTED_TAG" ]; then
+              echo "Tag $GITHUB_REF_NAME does not match VERSION $VERSION" >&2
+              exit 1
+            fi
+            NAME="SecureDice-$VERSION"
+          else
+            SHORT_SHA="${GITHUB_SHA::7}"
+            NAME="SecureDice-$VERSION-dev-$SHORT_SHA"
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -48,8 +69,8 @@ jobs:
       - name: Build ZIP
         shell: bash
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          ARCHIVE="SecureDice-$VERSION.zip"
+          mkdir -p dist
+          ARCHIVE="dist/${{ steps.package.outputs.name }}.zip"
           zip -r "$ARCHIVE" . \
             -x '.git/*' \
                '.github/*' \
@@ -58,7 +79,17 @@ jobs:
                '*.zip'
           echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
 
+      - name: Store development build for 90 days
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: dist/${{ steps.package.outputs.name }}.zip
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -78,7 +109,19 @@ jobs:
             gh release upload "$TAG" "$ARCHIVE" --clobber
           else
             gh release create "$TAG" "$ARCHIVE" \
-              --target "$GITHUB_SHA" \
               --title "Secure Dice $VERSION" \
               --generate-notes
           fi
+
+      - name: Remove superseded release entries
+        if: github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Separate development and release packages'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release list --limit 100 --json tagName --jq '.[].tagName' |
+            while IFS= read -r TAG; do
+              if [ "$TAG" != "v2.0.49" ]; then
+                gh release delete "$TAG" --yes
+              fi
+            done

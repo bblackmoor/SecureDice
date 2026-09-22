@@ -19,7 +19,9 @@ Secure Dice is available at [RPG Library](https://www.rpglibrary.org/software/se
 
 ## Download
 
-Versioned ZIP packages are published on [GitHub Releases](https://github.com/bblackmoor/SecureDice/releases). Each release provides `SecureDice-<version>.zip`, built automatically from the corresponding version.
+Permanent ZIP packages are available from [GitHub Releases](https://github.com/bblackmoor/SecureDice/releases). Each release provides `SecureDice-<version>.zip` and is published only when a matching version tag, such as `v2.0.50`, is pushed.
+
+Every commit to `main` also creates a development build under [GitHub Actions](https://github.com/bblackmoor/SecureDice/actions/workflows/release.yml). Development archives are named `SecureDice-<version>-dev-<commit>.zip`, require a GitHub sign-in to download, and are retained for 90 days.
 
 ## Screenshots
 
@@ -233,6 +235,8 @@ Configure a new clone to use the hook with:
 ```shell
 git config core.hooksPath .githooks
 ```
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## AI Disclaimer
 
