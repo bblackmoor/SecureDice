@@ -311,6 +311,123 @@ function mark_superseded_history(PDO $connection, int $recipientId, string $mess
 }
 
 /**
+ * Find the current recipient row for an email fingerprint.
+ *
+ * @return array<string, mixed>|null
+ */
+function find_recipient_by_fingerprint(PDO $connection, string $fingerprint): ?array
+{
+    $lookup = $connection->prepare(
+        'SELECT id, status FROM recipients WHERE email_fingerprint = :fingerprint'
+    );
+    $lookup->execute([':fingerprint' => $fingerprint]);
+    $record = $lookup->fetch();
+
+    return is_array($record) ? $record : null;
+}
+
+function prepare_recipient_for_consent(
+    PDO $connection,
+    ?array $existing,
+    string $fingerprint,
+    string $email,
+    string $now,
+    bool $isRecovery
+): int {
+    if ($isRecovery) {
+        return (int) $existing['id'];
+    }
+
+    if (is_array($existing)) {
+        $recipientId = (int) $existing['id'];
+        $update = $connection->prepare(
+            "UPDATE recipients
+            SET email_ciphertext = :ciphertext, status = 'pending', updated_at = :updated_at,
+                confirmed_at = NULL, revoked_at = NULL
+            WHERE id = :id"
+        );
+        $update->execute([
+            ':ciphertext' => consent_encrypt_string($email),
+            ':updated_at' => $now,
+            ':id' => $recipientId,
+        ]);
+
+        return $recipientId;
+    }
+
+    $insert = $connection->prepare(
+        "INSERT INTO recipients
+        (email_fingerprint, email_ciphertext, status, created_at, updated_at)
+        VALUES (:fingerprint, :ciphertext, 'pending', :created_at, :updated_at)"
+    );
+    $insert->execute([
+        ':fingerprint' => $fingerprint,
+        ':ciphertext' => consent_encrypt_string($email),
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+
+    return (int) $connection->lastInsertId();
+}
+
+function consume_open_consent_challenges(
+    PDO $connection,
+    int $recipientId,
+    string $purpose,
+    string $now
+): void {
+    $consume = $connection->prepare(
+        'UPDATE consent_challenges SET consumed_at = :consumed_at
+        WHERE recipient_id = :recipient_id AND purpose = :purpose AND consumed_at IS NULL'
+    );
+    $consume->execute([
+        ':consumed_at' => $now,
+        ':recipient_id' => $recipientId,
+        ':purpose' => $purpose,
+    ]);
+}
+
+function supersede_pending_recipient_messages(
+    PDO $connection,
+    int $recipientId,
+    string $messageType
+): void {
+    $supersede = $connection->prepare(
+        "UPDATE outbound_messages
+        SET status = 'failed', last_error = 'superseded', payload_ciphertext = NULL
+        WHERE recipient_id = :recipient_id AND message_type = :message_type
+            AND status = 'pending'"
+    );
+    $supersede->execute([
+        ':recipient_id' => $recipientId,
+        ':message_type' => $messageType,
+    ]);
+    mark_superseded_history($connection, $recipientId, $messageType);
+}
+
+function insert_consent_challenge(
+    PDO $connection,
+    int $recipientId,
+    string $token,
+    string $expires,
+    string $now,
+    string $purpose
+): void {
+    $challenge = $connection->prepare(
+        'INSERT INTO consent_challenges
+        (recipient_id, token_hash, expires_at, created_at, purpose)
+        VALUES (:recipient_id, :token_hash, :expires_at, :created_at, :purpose)'
+    );
+    $challenge->execute([
+        ':recipient_id' => $recipientId,
+        ':token_hash' => consent_token_hash($token),
+        ':expires_at' => $expires,
+        ':created_at' => $now,
+        ':purpose' => $purpose,
+    ]);
+}
+
+/**
  * Queue either a new opt-in confirmation or an active recipient's private
  * management-link recovery. The outward response is identical in both cases.
  */
@@ -323,10 +440,7 @@ function request_recipient_consent(string $submittedEmail, string $sourceIp): ar
     enforce_consent_rate_limit('enrollment-email', $fingerprint, 3, 86400);
 
     $connection = result_storage_connection();
-    $lookup = $connection->prepare('SELECT id, status FROM recipients WHERE email_fingerprint = :fingerprint');
-    $lookup->execute([':fingerprint' => $fingerprint]);
-    $existing = $lookup->fetch();
-
+    $existing = find_recipient_by_fingerprint($connection, $fingerprint);
     $now = consent_timestamp();
     $token = generate_long_consent_token();
     $expires = consent_timestamp(time() + 86400);
@@ -334,74 +448,21 @@ function request_recipient_consent(string $submittedEmail, string $sourceIp): ar
     $purpose = $isRecovery ? 'management_recovery' : 'enroll';
     $messageType = $isRecovery ? 'management_recovery' : 'consent_confirmation';
     $tokenField = $isRecovery ? 'recovery_token' : 'confirmation_token';
+
     $connection->beginTransaction();
 
     try {
-        if ($isRecovery) {
-            $recipientId = (int) $existing['id'];
-        } elseif (is_array($existing)) {
-            $recipientId = (int) $existing['id'];
-            $update = $connection->prepare(
-                "UPDATE recipients
-                SET email_ciphertext = :ciphertext, status = 'pending', updated_at = :updated_at,
-                    confirmed_at = NULL, revoked_at = NULL
-                WHERE id = :id"
-            );
-            $update->execute([
-                ':ciphertext' => consent_encrypt_string($email),
-                ':updated_at' => $now,
-                ':id' => $recipientId,
-            ]);
-        } else {
-            $insert = $connection->prepare(
-                "INSERT INTO recipients
-                (email_fingerprint, email_ciphertext, status, created_at, updated_at)
-                VALUES (:fingerprint, :ciphertext, 'pending', :created_at, :updated_at)"
-            );
-            $insert->execute([
-                ':fingerprint' => $fingerprint,
-                ':ciphertext' => consent_encrypt_string($email),
-                ':created_at' => $now,
-                ':updated_at' => $now,
-            ]);
-            $recipientId = (int) $connection->lastInsertId();
-        }
-
-        $consume = $connection->prepare(
-            'UPDATE consent_challenges SET consumed_at = :consumed_at
-            WHERE recipient_id = :recipient_id AND purpose = :purpose AND consumed_at IS NULL'
+        $recipientId = prepare_recipient_for_consent(
+            $connection,
+            $existing,
+            $fingerprint,
+            $email,
+            $now,
+            $isRecovery
         );
-        $consume->execute([
-            ':consumed_at' => $now,
-            ':recipient_id' => $recipientId,
-            ':purpose' => $purpose,
-        ]);
-
-        $supersede = $connection->prepare(
-            "UPDATE outbound_messages
-            SET status = 'failed', last_error = 'superseded', payload_ciphertext = NULL
-            WHERE recipient_id = :recipient_id AND message_type = :message_type
-                AND status = 'pending'"
-        );
-        $supersede->execute([
-            ':recipient_id' => $recipientId,
-            ':message_type' => $messageType,
-        ]);
-        mark_superseded_history($connection, $recipientId, $messageType);
-
-        $challenge = $connection->prepare(
-            'INSERT INTO consent_challenges
-            (recipient_id, token_hash, expires_at, created_at, purpose)
-            VALUES (:recipient_id, :token_hash, :expires_at, :created_at, :purpose)'
-        );
-        $challenge->execute([
-            ':recipient_id' => $recipientId,
-            ':token_hash' => consent_token_hash($token),
-            ':expires_at' => $expires,
-            ':created_at' => $now,
-            ':purpose' => $purpose,
-        ]);
-
+        consume_open_consent_challenges($connection, $recipientId, $purpose, $now);
+        supersede_pending_recipient_messages($connection, $recipientId, $messageType);
+        insert_consent_challenge($connection, $recipientId, $token, $expires, $now, $purpose);
         queue_consent_message($connection, $recipientId, $messageType, [
             'email' => $email,
             $tokenField => $token,
@@ -420,6 +481,109 @@ function request_recipient_consent(string $submittedEmail, string $sourceIp): ar
     return ['accepted' => true, 'queued' => true];
 }
 
+/**
+ * @return array<string, mixed>
+ */
+function find_live_consent_challenge(
+    PDO $connection,
+    string $token,
+    string $purpose,
+    string $recipientStatus,
+    string $invalidMessage,
+    string $now
+): array {
+    $lookup = $connection->prepare(
+        'SELECT c.id AS challenge_id, c.recipient_id, r.email_ciphertext
+        FROM consent_challenges c
+        JOIN recipients r ON r.id = c.recipient_id
+        WHERE c.token_hash = :token_hash
+            AND c.purpose = :purpose
+            AND c.consumed_at IS NULL
+            AND c.expires_at >= :now
+            AND r.status = :recipient_status'
+    );
+    $lookup->execute([
+        ':token_hash' => consent_token_hash($token),
+        ':purpose' => $purpose,
+        ':now' => $now,
+        ':recipient_status' => $recipientStatus,
+    ]);
+    $record = $lookup->fetch();
+
+    if (!is_array($record)) {
+        throw new InvalidConsentTokenException($invalidMessage);
+    }
+
+    return $record;
+}
+
+function consume_consent_challenge(PDO $connection, int $challengeId, string $now): void
+{
+    $consume = $connection->prepare(
+        'UPDATE consent_challenges SET consumed_at = :now WHERE id = :id AND consumed_at IS NULL'
+    );
+    $consume->execute([':now' => $now, ':id' => $challengeId]);
+}
+
+function revoke_active_recipient_tokens(
+    PDO $connection,
+    int $recipientId,
+    string $now,
+    array $tables
+): void {
+    foreach ($tables as $table) {
+        $revoke = $connection->prepare(
+            "UPDATE {$table} SET status = 'revoked', revoked_at = :now
+            WHERE recipient_id = :recipient_id AND status = 'active'"
+        );
+        $revoke->execute([':now' => $now, ':recipient_id' => $recipientId]);
+    }
+}
+
+function insert_recipient_management_token(
+    PDO $connection,
+    int $recipientId,
+    string $managementToken,
+    string $now
+): void {
+    $management = $connection->prepare(
+        "INSERT INTO recipient_management_tokens
+        (recipient_id, token_hash, status, created_at)
+        VALUES (:recipient_id, :token_hash, 'active', :created_at)"
+    );
+    $management->execute([
+        ':recipient_id' => $recipientId,
+        ':token_hash' => consent_token_hash($managementToken),
+        ':created_at' => $now,
+    ]);
+}
+
+function queue_recipient_credentials(
+    PDO $connection,
+    int $recipientId,
+    string $email,
+    string $managementToken,
+    string $unsubscribeToken,
+    string $now
+): void {
+    supersede_pending_recipient_messages($connection, $recipientId, 'consent_credentials');
+    queue_consent_message($connection, $recipientId, 'consent_credentials', [
+        'email' => $email,
+        'management_token' => $managementToken,
+        'unsubscribe_token' => $unsubscribeToken,
+    ], $now);
+}
+
+function activate_confirmed_recipient(PDO $connection, int $recipientId, string $now): void
+{
+    $activate = $connection->prepare(
+        "UPDATE recipients
+        SET status = 'active', updated_at = :now, confirmed_at = :now, revoked_at = NULL
+        WHERE id = :id"
+    );
+    $activate->execute([':now' => $now, ':id' => $recipientId]);
+}
+
 /** Consume a one-time confirmation and return capabilities that are shown once. */
 function confirm_recipient_consent(string $submittedToken, string $sourceIp): array
 {
@@ -429,73 +593,37 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
     $connection->beginTransaction();
 
     try {
-        $lookup = $connection->prepare(
-            "SELECT c.id AS challenge_id, c.recipient_id, r.email_ciphertext
-            FROM consent_challenges c
-            JOIN recipients r ON r.id = c.recipient_id
-            WHERE c.token_hash = :token_hash
-                AND c.purpose = 'enroll'
-                AND c.consumed_at IS NULL
-                AND c.expires_at >= :now
-                AND r.status = 'pending'"
-        );
         $now = consent_timestamp();
-        $lookup->execute([':token_hash' => consent_token_hash($token), ':now' => $now]);
-        $record = $lookup->fetch();
-
-        if (!is_array($record)) {
-            throw new InvalidConsentTokenException('The consent link is invalid or has expired.');
-        }
-
+        $record = find_live_consent_challenge(
+            $connection,
+            $token,
+            'enroll',
+            'pending',
+            'The consent link is invalid or has expired.',
+            $now
+        );
         $recipientId = (int) $record['recipient_id'];
+        $email = consent_decrypt_string((string) $record['email_ciphertext']);
         $managementToken = generate_long_consent_token();
         $unsubscribeToken = insert_unsubscribe_token($connection, $recipientId, $now);
 
-        $consume = $connection->prepare(
-            'UPDATE consent_challenges SET consumed_at = :now WHERE id = :id AND consumed_at IS NULL'
+        consume_consent_challenge($connection, (int) $record['challenge_id'], $now);
+        activate_confirmed_recipient($connection, $recipientId, $now);
+        revoke_active_recipient_tokens(
+            $connection,
+            $recipientId,
+            $now,
+            ['recipient_capabilities', 'recipient_management_tokens']
         );
-        $consume->execute([':now' => $now, ':id' => (int) $record['challenge_id']]);
-
-        $activate = $connection->prepare(
-            "UPDATE recipients
-            SET status = 'active', updated_at = :now, confirmed_at = :now, revoked_at = NULL
-            WHERE id = :id"
+        insert_recipient_management_token($connection, $recipientId, $managementToken, $now);
+        queue_recipient_credentials(
+            $connection,
+            $recipientId,
+            $email,
+            $managementToken,
+            $unsubscribeToken,
+            $now
         );
-        $activate->execute([':now' => $now, ':id' => $recipientId]);
-
-        foreach (['recipient_capabilities', 'recipient_management_tokens'] as $table) {
-            $revoke = $connection->prepare(
-                "UPDATE {$table} SET status = 'revoked', revoked_at = :now
-                WHERE recipient_id = :recipient_id AND status = 'active'"
-            );
-            $revoke->execute([':now' => $now, ':recipient_id' => $recipientId]);
-        }
-
-        $management = $connection->prepare(
-            "INSERT INTO recipient_management_tokens
-            (recipient_id, token_hash, status, created_at)
-            VALUES (:recipient_id, :token_hash, 'active', :created_at)"
-        );
-        $management->execute([
-            ':recipient_id' => $recipientId,
-            ':token_hash' => consent_token_hash($managementToken),
-            ':created_at' => $now,
-        ]);
-
-        $supersedeCredentials = $connection->prepare(
-            "UPDATE outbound_messages SET status = 'failed', last_error = 'superseded',
-                payload_ciphertext = NULL
-            WHERE recipient_id = :recipient_id
-                AND message_type = 'consent_credentials' AND status = 'pending'"
-        );
-        $supersedeCredentials->execute([':recipient_id' => $recipientId]);
-        mark_superseded_history($connection, $recipientId, 'consent_credentials');
-
-        queue_consent_message($connection, $recipientId, 'consent_credentials', [
-            'email' => consent_decrypt_string((string) $record['email_ciphertext']),
-            'management_token' => $managementToken,
-            'unsubscribe_token' => $unsubscribeToken,
-        ], $now);
 
         $connection->commit();
     } catch (Throwable $e) {
@@ -508,7 +636,7 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
 
     return [
         'management_token' => $managementToken,
-        'masked_email' => mask_recipient_email(consent_decrypt_string((string) $record['email_ciphertext'])),
+        'masked_email' => mask_recipient_email($email),
     ];
 }
 
@@ -521,65 +649,36 @@ function recover_recipient_management(string $submittedToken, string $sourceIp):
     $connection->beginTransaction();
 
     try {
-        $lookup = $connection->prepare(
-            "SELECT c.id AS challenge_id, c.recipient_id, r.email_ciphertext
-            FROM consent_challenges c
-            JOIN recipients r ON r.id = c.recipient_id
-            WHERE c.token_hash = :token_hash
-                AND c.purpose = 'management_recovery'
-                AND c.consumed_at IS NULL
-                AND c.expires_at >= :now
-                AND r.status = 'active'"
-        );
         $now = consent_timestamp();
-        $lookup->execute([':token_hash' => consent_token_hash($token), ':now' => $now]);
-        $record = $lookup->fetch();
-
-        if (!is_array($record)) {
-            throw new InvalidConsentTokenException('The recovery link is invalid or has expired.');
-        }
-
+        $record = find_live_consent_challenge(
+            $connection,
+            $token,
+            'management_recovery',
+            'active',
+            'The recovery link is invalid or has expired.',
+            $now
+        );
         $recipientId = (int) $record['recipient_id'];
+        $email = consent_decrypt_string((string) $record['email_ciphertext']);
         $managementToken = generate_long_consent_token();
         $unsubscribeToken = insert_unsubscribe_token($connection, $recipientId, $now);
 
-        $consume = $connection->prepare(
-            'UPDATE consent_challenges SET consumed_at = :now WHERE id = :id AND consumed_at IS NULL'
+        consume_consent_challenge($connection, (int) $record['challenge_id'], $now);
+        revoke_active_recipient_tokens(
+            $connection,
+            $recipientId,
+            $now,
+            ['recipient_management_tokens']
         );
-        $consume->execute([':now' => $now, ':id' => (int) $record['challenge_id']]);
-
-        $revoke = $connection->prepare(
-            "UPDATE recipient_management_tokens SET status = 'revoked', revoked_at = :now
-            WHERE recipient_id = :recipient_id AND status = 'active'"
+        insert_recipient_management_token($connection, $recipientId, $managementToken, $now);
+        queue_recipient_credentials(
+            $connection,
+            $recipientId,
+            $email,
+            $managementToken,
+            $unsubscribeToken,
+            $now
         );
-        $revoke->execute([':now' => $now, ':recipient_id' => $recipientId]);
-
-        $management = $connection->prepare(
-            "INSERT INTO recipient_management_tokens
-            (recipient_id, token_hash, status, created_at)
-            VALUES (:recipient_id, :token_hash, 'active', :created_at)"
-        );
-        $management->execute([
-            ':recipient_id' => $recipientId,
-            ':token_hash' => consent_token_hash($managementToken),
-            ':created_at' => $now,
-        ]);
-
-        $supersedeCredentials = $connection->prepare(
-            "UPDATE outbound_messages SET status = 'failed', last_error = 'superseded',
-                payload_ciphertext = NULL
-            WHERE recipient_id = :recipient_id
-                AND message_type = 'consent_credentials' AND status = 'pending'"
-        );
-        $supersedeCredentials->execute([':recipient_id' => $recipientId]);
-        mark_superseded_history($connection, $recipientId, 'consent_credentials');
-
-        $email = consent_decrypt_string((string) $record['email_ciphertext']);
-        queue_consent_message($connection, $recipientId, 'consent_credentials', [
-            'email' => $email,
-            'management_token' => $managementToken,
-            'unsubscribe_token' => $unsubscribeToken,
-        ], $now);
 
         $connection->commit();
     } catch (Throwable $e) {
