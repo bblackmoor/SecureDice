@@ -249,4 +249,5 @@ function securedice_load_configuration(): void
     securedice_apply_configuration(securedice_parse_configuration_file($path));
 }
 
+putenv('SECUREDICE_CONFIG_PATH=/home/rpglibrary/.securedice.env');
 securedice_load_configuration();
