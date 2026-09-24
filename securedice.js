@@ -241,6 +241,37 @@
         return url.toString();
     }
 
+    function getPrimaryDiceControls() {
+        return {
+            diceCount: qsId("dice_count"),
+            dieType: qsId("die_type"),
+            mode: qsId("mode")
+        };
+    }
+
+    function getSecondaryDiceControls() {
+        return {
+            rows: document.querySelectorAll(".roll-b, .dice-section-title-b"),
+            diceCount: qsId("dice_count_b"),
+            dieType: qsId("die_type_b"),
+            modifier: qsId("mod_b"),
+            mode: qsId("mode_b")
+        };
+    }
+
+    function setSecondaryControlsHidden(controls, hidden) {
+        Array.prototype.forEach.call(controls.rows, function (row) {
+            row.hidden = hidden;
+        });
+
+        [controls.diceCount, controls.dieType, controls.modifier, controls.mode]
+            .forEach(function (control) {
+                if (control) {
+                    control.disabled = hidden;
+                }
+            });
+    }
+
     function setRowBDefaults(diceCountB, dieTypeB, modeB, modB) {
         if (diceCountB) {
             diceCountB.value = "0";
@@ -259,179 +290,126 @@
         }
     }
 
-    function applyUI() {
-        const diceCountA = qsId("dice_count");
-        const dieTypeA = qsId("die_type");
-        const modeA = qsId("mode");
-
-        const secondaryRows = document.querySelectorAll(".roll-b, .dice-section-title-b");
-        const diceCountB = qsId("dice_count_b");
-        const dieTypeB = qsId("die_type_b");
-        const modB = qsId("mod_b");
-        const modeB = qsId("mode_b");
-
-        if (!diceCountA || !dieTypeA || !modeA) {
-            return;
-        }
-
-        const row1IsFudge = (String(dieTypeA.value || "") === "d6f");
+    function applyPrimaryDiceRules(controls) {
+        const row1IsFudge = (String(controls.dieType.value || "") === "d6f");
 
         if (row1IsFudge) {
-            modeA.value = "sum";
-            modeA.disabled = true;
+            controls.mode.value = "sum";
+            controls.mode.disabled = true;
         } else {
-            if (modeA.disabled) {
-                modeA.value = "sum";
+            if (controls.mode.disabled) {
+                controls.mode.value = "sum";
             }
 
-            modeA.disabled = false;
+            controls.mode.disabled = false;
         }
 
-        const row1IsStunt = (!row1IsFudge && String(modeA.value || "") === "stunt");
-        const row1IsWild = (!row1IsFudge && String(modeA.value || "") === "wild");
+        const row1IsStunt = (!row1IsFudge && String(controls.mode.value || "") === "stunt");
+        const row1IsWild = (!row1IsFudge && String(controls.mode.value || "") === "wild");
 
         if (row1IsStunt) {
-            diceCountA.value = "3";
-            dieTypeA.value = "d6";
-            diceCountA.disabled = true;
-            dieTypeA.disabled = true;
+            controls.diceCount.value = "3";
+            controls.dieType.value = "d6";
+            controls.diceCount.disabled = true;
+            controls.dieType.disabled = true;
         } else {
-            diceCountA.disabled = false;
-            dieTypeA.disabled = false;
+            controls.diceCount.disabled = false;
+            controls.dieType.disabled = false;
         }
 
         if (!row1IsStunt && row1IsWild) {
-            const n = parseInt(String(diceCountA.value || ""), 10);
+            const n = parseInt(String(controls.diceCount.value || ""), 10);
 
             if (!Number.isFinite(n) || n < 1) {
-                diceCountA.value = "1";
+                controls.diceCount.value = "1";
             }
 
-            if (String(dieTypeA.value || "") !== "d6") {
-                dieTypeA.value = "d6";
+            if (String(controls.dieType.value || "") !== "d6") {
+                controls.dieType.value = "d6";
             }
 
-            dieTypeA.disabled = true;
+            controls.dieType.disabled = true;
         }
 
-        const hideRowB = (row1IsFudge || row1IsWild || row1IsStunt);
+        setDropModeOptionsEnabled(controls.mode, getAbsIntValue(controls.diceCount) >= 2);
 
-        Array.prototype.forEach.call(secondaryRows, function (row) {
-            row.hidden = hideRowB;
+        return row1IsFudge || row1IsWild || row1IsStunt;
+    }
+
+    function applySecondaryDiceRules(controls, hidden) {
+        setSecondaryControlsHidden(controls, hidden);
+        setDropModeOptionsEnabled(controls.mode, getAbsIntValue(controls.diceCount) >= 2);
+
+        if (hidden) {
+            setRowBDefaults(controls.diceCount, controls.dieType, controls.mode, controls.modifier);
+        }
+    }
+
+    function applyUI() {
+        const primary = getPrimaryDiceControls();
+
+        if (!primary.diceCount || !primary.dieType || !primary.mode) {
+            return;
+        }
+
+        const secondary = getSecondaryDiceControls();
+        const hideSecondary = applyPrimaryDiceRules(primary);
+
+        applySecondaryDiceRules(secondary, hideSecondary);
+    }
+
+    function wireControlChange(control, beforeApply) {
+        if (!control) {
+            return;
+        }
+
+        control.addEventListener("change", function () {
+            if (beforeApply) {
+                beforeApply();
+            }
+
+            applyUI();
         });
+    }
 
-        if (diceCountB) {
-            diceCountB.disabled = hideRowB;
-        }
-
-        if (dieTypeB) {
-            dieTypeB.disabled = hideRowB;
-        }
-
-        if (modB) {
-            modB.disabled = hideRowB;
-        }
-
-        if (modeB) {
-            modeB.disabled = hideRowB;
-        }
-
-        setDropModeOptionsEnabled(modeA, getAbsIntValue(diceCountA) >= 2);
-        setDropModeOptionsEnabled(modeB, getAbsIntValue(diceCountB) >= 2);
-
-        if (hideRowB) {
-            setRowBDefaults(diceCountB, dieTypeB, modeB, modB);
+    function clearValidity(control) {
+        if (control) {
+            control.setCustomValidity("");
         }
     }
 
     function wireDiceUi() {
-        const dieTypeA = qsId("die_type");
-        const modeA = qsId("mode");
-        const modeB = qsId("mode_b");
-        const diceCountA = qsId("dice_count");
-        const diceCountB = qsId("dice_count_b");
+        const primary = getPrimaryDiceControls();
+        const secondary = getSecondaryDiceControls();
 
-        if (dieTypeA) {
-            dieTypeA.addEventListener("change", applyUI);
-        }
-
-        if (modeA) {
-            modeA.addEventListener("change", function () {
-                modeA.setCustomValidity("");
-                applyUI();
-            });
-        }
-
-        if (diceCountA) {
-            diceCountA.addEventListener("change", function () {
-                if (modeA) {
-                    modeA.setCustomValidity("");
-                }
-                applyUI();
-            });
-        }
-
-        if (diceCountB) {
-            diceCountB.addEventListener("change", function () {
-                if (modeB) {
-                    modeB.setCustomValidity("");
-                }
-                applyUI();
-            });
-        }
-
-        if (modeB) {
-            modeB.addEventListener("change", function () {
-                modeB.setCustomValidity("");
-                applyUI();
-            });
-        }
+        wireControlChange(primary.dieType);
+        wireControlChange(primary.mode, function () {
+            clearValidity(primary.mode);
+        });
+        wireControlChange(primary.diceCount, function () {
+            clearValidity(primary.mode);
+        });
+        wireControlChange(secondary.diceCount, function () {
+            clearValidity(secondary.mode);
+        });
+        wireControlChange(secondary.mode, function () {
+            clearValidity(secondary.mode);
+        });
 
         applyUI();
     }
 
     function prepareFormForReset() {
-        const diceCountA = qsId("dice_count");
-        const dieTypeA = qsId("die_type");
-        const modeA = qsId("mode");
+        const primary = getPrimaryDiceControls();
+        const secondary = getSecondaryDiceControls();
 
-        const secondaryRows = document.querySelectorAll(".roll-b, .dice-section-title-b");
-        const diceCountB = qsId("dice_count_b");
-        const dieTypeB = qsId("die_type_b");
-        const modB = qsId("mod_b");
-        const modeB = qsId("mode_b");
-
-        if (diceCountA) {
-            diceCountA.disabled = false;
-        }
-
-        if (dieTypeA) {
-            dieTypeA.disabled = false;
-        }
-
-        if (modeA) {
-            modeA.disabled = false;
-        }
-
-        Array.prototype.forEach.call(secondaryRows, function (row) {
-            row.hidden = false;
+        [primary.diceCount, primary.dieType, primary.mode].forEach(function (control) {
+            if (control) {
+                control.disabled = false;
+            }
         });
 
-        if (diceCountB) {
-            diceCountB.disabled = false;
-        }
-
-        if (dieTypeB) {
-            dieTypeB.disabled = false;
-        }
-
-        if (modB) {
-            modB.disabled = false;
-        }
-
-        if (modeB) {
-            modeB.disabled = false;
-        }
+        setSecondaryControlsHidden(secondary, false);
     }
 
     function validateFormBeforeSubmit(event) {
@@ -465,19 +443,7 @@
             form.addEventListener("submit", validateFormBeforeSubmit);
         }
 
-        if (copyBtn) {
-            copyBtn.addEventListener("click", function () {
-                const url = buildPresetUrl();
-
-                copyToClipboard(url)
-                    .then(function () {
-                        flashButtonText(copyBtn, "Copied!", 900);
-                    })
-                    .catch(function () {
-                        flashButtonText(copyBtn, "Copy Failed", 1200);
-                    });
-            });
-        }
+        wireCopyButton(copyBtn, buildPresetUrl);
 
         if (resetBtn && form) {
             resetBtn.addEventListener("click", function () {
@@ -489,35 +455,45 @@
         }
     }
 
+    function wireCopyButton(button, getText) {
+        if (!button) {
+            return;
+        }
+
+        button.addEventListener("click", function () {
+            copyToClipboard(getText())
+                .then(function () {
+                    flashButtonText(button, "Copied!", 900);
+                })
+                .catch(function () {
+                    flashButtonText(button, "Copy Failed", 1200);
+                });
+        });
+    }
+
     function wireResultsCopyButtons() {
         const jsonTa = qsId("json-output");
         const copyJson = qsId("copy-json");
 
         if (copyJson && jsonTa) {
-            copyJson.addEventListener("click", function () {
-                const txt = String(jsonTa.value || "");
-
-                copyToClipboard(txt)
-                    .then(function () {
-                        flashButtonText(copyJson, "Copied!", 900);
-                    })
-                    .catch(function () {
-                        flashButtonText(copyJson, "Copy Failed", 1200);
-                    });
+            wireCopyButton(copyJson, function () {
+                return String(jsonTa.value || "");
             });
         }
 
         Array.prototype.forEach.call(document.querySelectorAll("[data-copy]"), function (copyButton) {
-            copyButton.addEventListener("click", function () {
-                const txt = String(copyButton.getAttribute("data-copy") || "");
+            wireCopyButton(copyButton, function () {
+                return String(copyButton.getAttribute("data-copy") || "");
+            });
+        });
+    }
 
-                copyToClipboard(txt)
-                    .then(function () {
-                        flashButtonText(copyButton, "Copied!", 900);
-                    })
-                    .catch(function () {
-                        flashButtonText(copyButton, "Copy Failed", 1200);
-                    });
+    function wireConfirmationForms() {
+        Array.prototype.forEach.call(document.querySelectorAll("form[data-confirm]"), function (form) {
+            form.addEventListener("submit", function (event) {
+                if (!window.confirm(String(form.getAttribute("data-confirm") || "Continue?"))) {
+                    event.preventDefault();
+                }
             });
         });
     }
@@ -526,14 +502,7 @@
         wireDiceUi();
         wireFloatingActions();
         wireResultsCopyButtons();
-
-        Array.prototype.forEach.call(document.querySelectorAll("form[data-confirm]"), function (form) {
-            form.addEventListener("submit", function (event) {
-                if (!window.confirm(String(form.getAttribute("data-confirm") || "Continue?"))) {
-                    event.preventDefault();
-                }
-            });
-        });
+        wireConfirmationForms();
     }
 
     document.addEventListener("DOMContentLoaded", init);
