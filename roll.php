@@ -105,209 +105,230 @@ function do_one_roll(
     ];
 }
 
-try {
+function preset_normal_die_type(int $sides, array $allowedDieTypes): string
+{
+    $raw = 'd' . $sides;
+
+    return (
+        isset($allowedDieTypes[$raw])
+        && (string) $allowedDieTypes[$raw]['kind'] === 'normal'
+    ) ? $raw : 'd6';
+}
+
+function read_roll_request(
+    bool $useGetPresets,
+    array $allowedDieTypes,
+    array $allowedModesRow1,
+    array $allowedModesRow2
+): array {
     if ($useGetPresets) {
-        $diceCountA = read_int('aq', 3, true);
-        $asA = read_int('as', 6, true);
-        $afA = read_int('af', 0, true);
-        $modA = read_int('am', 0, true);
-        $adA = strtolower(read_str('ad', 'sum', true));
+        $fudgeA = read_int('af', 0, true);
+        $modeA = strtolower(read_str('ad', 'sum', true));
+        $modeB = strtolower(read_str('bd', 'sum', true));
 
-        $diceCountB = read_int('bq', 0, true);
-        $asB = read_int('bs', 6, true);
-        $modB = read_int('bm', 0, true);
-        $adB = strtolower(read_str('bd', 'sum', true));
+        return [
+            'dice_count_a' => read_int('aq', 3, true),
+            'die_type_a' => $fudgeA === 1
+                ? 'd6f'
+                : preset_normal_die_type(read_int('as', 6, true), $allowedDieTypes),
+            'modifier_a' => read_int('am', 0, true),
+            'mode_a' => in_array($modeA, $allowedModesRow1, true) ? $modeA : 'sum',
+            'dice_count_b' => read_int('bq', 0, true),
+            'die_type_b' => preset_normal_die_type(read_int('bs', 6, true), $allowedDieTypes),
+            'modifier_b' => read_int('bm', 0, true),
+            'mode_b' => in_array($modeB, $allowedModesRow2, true) ? $modeB : 'sum',
+            'repeat' => read_int('dt', 1, true),
+            'sort_results' => read_int('sdt', 0, true) === 1,
+        ];
+    }
 
-        $repeat = read_int('dt', 1, true);
-        $sortResults = (read_int('sdt', 0, true) === 1);
+    return [
+        'dice_count_a' => read_int('dice_count', 3, false),
+        'die_type_a' => read_str('die_type', 'd6', false),
+        'modifier_a' => read_int('mod', 0, false),
+        'mode_a' => read_str('mode', 'sum', false),
+        'dice_count_b' => read_int('dice_count_b', 0, false),
+        'die_type_b' => read_str('die_type_b', 'd6', false),
+        'modifier_b' => read_int('mod_b', 0, false),
+        'mode_b' => read_str('mode_b', 'sum', false),
+        'repeat' => read_int('repeat', 1, false),
+        'sort_results' => read_int('sort_results', 0, false) === 1,
+    ];
+}
 
-        if ($afA === 1) {
-            $dieTypeRawA = 'd6f';
-        } else {
-            $presetDieTypeRawA = 'd' . $asA;
-            $dieTypeRawA = (
-                isset($allowedDieTypes[$presetDieTypeRawA])
-                && (string) $allowedDieTypes[$presetDieTypeRawA]['kind'] === 'normal'
-            )
-                ? $presetDieTypeRawA
-                : 'd6';
+function normalize_primary_roll(array $request, array $allowedDiceCounts, array $allowedModes): array
+{
+    $diceCount = (int) $request['dice_count_a'];
+
+    if (!in_array($diceCount, $allowedDiceCounts, true)) {
+        $diceCount = 3;
+    }
+
+    $mode = (string) $request['mode_a'];
+
+    if (!in_array($mode, $allowedModes, true)) {
+        $mode = 'sum';
+    }
+
+    $dieType = (string) $request['die_type_a'];
+    $die = parse_die_type($dieType);
+
+    if ($die['kind'] === 'fudge') {
+        $mode = 'sum';
+    }
+
+    if ($mode === 'stunt') {
+        $diceCount = 3;
+        $dieType = 'd6';
+        $die = parse_die_type($dieType);
+    }
+
+    if ($mode === 'wild') {
+        if ($diceCount < 2) {
+            $diceCount = 2;
         }
 
-        $modeA = in_array($adA, $allowedModesRow1, true)
-            ? $adA
-            : 'sum';
-
-        $presetDieTypeRawB = 'd' . $asB;
-        $dieTypeRawB = (
-            isset($allowedDieTypes[$presetDieTypeRawB])
-            && (string) $allowedDieTypes[$presetDieTypeRawB]['kind'] === 'normal'
-        )
-            ? $presetDieTypeRawB
-            : 'd6';
-
-        $modeB = in_array($adB, $allowedModesRow2, true)
-            ? $adB
-            : 'sum';
-    } else {
-        // POST keys from form
-        $diceCountA = read_int('dice_count', 3, false);
-        $dieTypeRawA = read_str('die_type', 'd6', false);
-        $modA = read_int('mod', 0, false);
-        $modeA = read_str('mode', 'sum', false);
-
-        $diceCountB = read_int('dice_count_b', 0, false);
-        $dieTypeRawB = read_str('die_type_b', 'd6', false);
-        $modB = read_int('mod_b', 0, false);
-        $modeB = read_str('mode_b', 'sum', false);
-
-        $repeat = read_int('repeat', 1, false);
-        $sortResults = (read_int('sort_results', 0, false) === 1);
-    }
-
-    // Allowlists / clamps
-    if (!in_array($diceCountA, $allowedDiceCountsRow1, true)) {
-        $diceCountA = 3;
-    }
-
-    if (!in_array($repeat, $allowedRepeats, true)) {
-        throw new RuntimeException('Invalid repeat count.');
-    }
-
-    $modA = clamp_int($modA, -60, 60);
-
-    if (!in_array($modeA, $allowedModesRow1, true)) {
-        $modeA = 'sum';
-    }
-
-    $dtA = parse_die_type($dieTypeRawA);
-
-    // Enforce Row1 special rules server-side
-    if ($dtA['kind'] === 'fudge') {
-        $modeA = 'sum';
-    }
-
-    if ($modeA === 'stunt') {
-        $diceCountA = 3;
-        $dieTypeRawA = 'd6';
-        $dtA = parse_die_type($dieTypeRawA);
-    }
-
-    if ($modeA === 'wild') {
-        if ($diceCountA < 2) {
-            $diceCountA = 2;
-        }
-
-        $dieTypeRawA = 'd6';
-        $dtA = parse_die_type($dieTypeRawA);
+        $dieType = 'd6';
+        $die = parse_die_type($dieType);
     }
 
     validate_mode_constraints(
-        $modeA,
-        (string) $dtA['kind'],
-        (int) $dtA['sides'],
-        $diceCountA,
+        $mode,
+        (string) $die['kind'],
+        (int) $die['sides'],
+        $diceCount,
         'First roll'
     );
 
-    // Row2
-    if (!in_array($diceCountB, $allowedDiceCountsRow2, true)) {
-        $diceCountB = 0;
+    return [
+        'dice_count' => $diceCount,
+        'die_type' => $dieType,
+        'die' => $die,
+        'modifier' => clamp_int((int) $request['modifier_a'], -60, 60),
+        'mode' => $mode,
+    ];
+}
+
+function normalize_secondary_roll(
+    array $request,
+    array $primary,
+    array $allowedDiceCounts,
+    array $allowedModes
+): array {
+    $diceCount = (int) $request['dice_count_b'];
+
+    if (!in_array($diceCount, $allowedDiceCounts, true)) {
+        $diceCount = 0;
     }
 
-    $diceCountBSign = ($diceCountB < 0) ? -1 : 1;
-    $diceCountBRoll = abs($diceCountB);
+    $sign = $diceCount < 0 ? -1 : 1;
+    $rollCount = abs($diceCount);
+    $mode = (string) $request['mode_b'];
 
-    $modB = clamp_int($modB, -60, 60);
-
-    if (!in_array($modeB, $allowedModesRow2, true)) {
-        $modeB = 'sum';
+    if (!in_array($mode, $allowedModes, true)) {
+        $mode = 'sum';
     }
 
-    // Row2 forced off if Row1 is FUDGE/WILD/STUNT
-    $row1ForcesRow2Off = (
-        ($dtA['kind'] === 'fudge')
-        || $modeA === 'wild'
-        || $modeA === 'stunt'
-    );
-
-    if ($row1ForcesRow2Off) {
-        $diceCountB = 0;
-        $diceCountBSign = 1;
-        $diceCountBRoll = 0;
+    if (
+        $primary['die']['kind'] === 'fudge'
+        || $primary['mode'] === 'wild'
+        || $primary['mode'] === 'stunt'
+    ) {
+        $diceCount = 0;
+        $sign = 1;
+        $rollCount = 0;
     }
 
-    // Row2 restrictions
-    if ($diceCountBRoll > 0) {
-        if ($dieTypeRawB === 'd6f') {
+    $dieType = (string) $request['die_type_b'];
+
+    if ($rollCount > 0) {
+        if ($dieType === 'd6f') {
             throw new RuntimeException('Second roll: FUDGE is not allowed.');
         }
 
-        if ($modeB === 'wild' || $modeB === 'stunt') {
+        if ($mode === 'wild' || $mode === 'stunt') {
             throw new RuntimeException('Second roll: wild/stunt not allowed.');
         }
 
-        $dt2 = parse_die_type($dieTypeRawB);
-
+        $die = parse_die_type($dieType);
         validate_mode_constraints(
-            $modeB,
-            (string) $dt2['kind'],
-            (int) $dt2['sides'],
-            $diceCountBRoll,
+            $mode,
+            (string) $die['kind'],
+            (int) $die['sides'],
+            $rollCount,
             'Second roll'
         );
     }
 
-    $activeB = ($diceCountBRoll > 0);
+    return [
+        'dice_count' => $diceCount,
+        'roll_count' => $rollCount,
+        'operator' => $sign,
+        'die_type' => $dieType,
+        'modifier' => clamp_int((int) $request['modifier_b'], -60, 60),
+        'mode' => $mode,
+        'active' => $rollCount > 0,
+    ];
+}
 
-    // Trials
+function execute_roll_sets(array $primary, array $secondary, int $repeat): array
+{
     $sets = [];
     $totals = [];
 
     for ($i = 0; $i < $repeat; $i++) {
-        $r1 = do_one_roll($diceCountA, $dieTypeRawA, $modeA, $modA);
+        $first = do_one_roll(
+            $primary['dice_count'],
+            $primary['die_type'],
+            $primary['mode'],
+            $primary['modifier']
+        );
+        $second = $secondary['active']
+            ? do_one_roll(
+                $secondary['roll_count'],
+                $secondary['die_type'],
+                $secondary['mode'],
+                $secondary['modifier']
+            )
+            : null;
+        $terms = [[
+            'pool' => 'A',
+            'operator' => 1,
+            'result' => $first,
+        ]];
+        $total = (int) $first['total'];
 
-        $r2 = null;
-
-        if ($activeB) {
-            $r2 = do_one_roll($diceCountBRoll, $dieTypeRawB, $modeB, $modB);
-        }
-
-        $terms = [
-            [
-                'pool' => 'A',
-                'operator' => 1,
-                'result' => $r1,
-            ],
-        ];
-
-        $final = (int) $r1['total'];
-
-        if ($r2 !== null) {
+        if ($second !== null) {
             $terms[] = [
                 'pool' => 'B',
-                'operator' => $diceCountBSign,
-                'result' => $r2,
+                'operator' => $secondary['operator'],
+                'result' => $second,
             ];
-            $final += $diceCountBSign * (int) $r2['total'];
+            $total += $secondary['operator'] * (int) $second['total'];
         }
 
         $sets[] = [
             'number' => $i + 1,
             'terms' => $terms,
-            'total' => $final,
+            'total' => $total,
         ];
-
-        $totals[] = $final;
+        $totals[] = $total;
     }
 
-    $summary = summarize_totals($totals);
+    return ['sets' => $sets, 'totals' => $totals];
+}
 
-    $dieA = parse_die_type($dieTypeRawA);
-    $dieB = parse_die_type($dieTypeRawB);
+function build_roll_result_record(
+    array $primary,
+    array $secondary,
+    int $repeat,
+    bool $sortResults,
+    array $rolls
+): array {
+    $dieA = parse_die_type($primary['die_type']);
+    $dieB = parse_die_type($secondary['die_type']);
 
-    app_start_session();
-
-    $_SESSION['last_roll'] = store_result_record([
+    return [
         'schema_version' => 2,
         'generated_at' => gmdate(DATE_ATOM),
         'specification' => [
@@ -315,29 +336,62 @@ try {
             'sort_results' => $sortResults,
             'pools' => [
                 'A' => [
-                    'dice_count' => $diceCountA,
-                    'die_type' => $dieTypeRawA,
+                    'dice_count' => $primary['dice_count'],
+                    'die_type' => $primary['die_type'],
                     'die_kind' => $dieA['kind'],
                     'sides' => (int) $dieA['sides'],
                     'die_label' => (string) $dieA['label'],
-                    'modifier' => $modA,
-                    'mode' => $modeA,
+                    'modifier' => $primary['modifier'],
+                    'mode' => $primary['mode'],
                 ],
-                'B' => $activeB ? [
-                    'dice_count' => $diceCountBRoll,
-                    'operator' => $diceCountBSign,
-                    'die_type' => $dieTypeRawB,
+                'B' => $secondary['active'] ? [
+                    'dice_count' => $secondary['roll_count'],
+                    'operator' => $secondary['operator'],
+                    'die_type' => $secondary['die_type'],
                     'die_kind' => $dieB['kind'],
                     'sides' => (int) $dieB['sides'],
                     'die_label' => (string) $dieB['label'],
-                    'modifier' => $modB,
-                    'mode' => $modeB,
+                    'modifier' => $secondary['modifier'],
+                    'mode' => $secondary['mode'],
                 ] : null,
             ],
         ],
-        'summary' => $summary,
-        'sets' => $sets,
-    ]);
+        'summary' => summarize_totals($rolls['totals']),
+        'sets' => $rolls['sets'],
+    ];
+}
+
+try {
+    $request = read_roll_request(
+        $useGetPresets,
+        $allowedDieTypes,
+        $allowedModesRow1,
+        $allowedModesRow2
+    );
+    $repeat = (int) $request['repeat'];
+
+    if (!in_array($repeat, $allowedRepeats, true)) {
+        throw new RuntimeException('Invalid repeat count.');
+    }
+
+    $primary = normalize_primary_roll($request, $allowedDiceCountsRow1, $allowedModesRow1);
+    $secondary = normalize_secondary_roll(
+        $request,
+        $primary,
+        $allowedDiceCountsRow2,
+        $allowedModesRow2
+    );
+    $rolls = execute_roll_sets($primary, $secondary, $repeat);
+    $result = build_roll_result_record(
+        $primary,
+        $secondary,
+        $repeat,
+        (bool) $request['sort_results'],
+        $rolls
+    );
+
+    app_start_session();
+    $_SESSION['last_roll'] = store_result_record($result);
 
     header('Location: results.php');
     exit;
