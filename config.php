@@ -249,5 +249,13 @@ function securedice_load_configuration(): void
     securedice_apply_configuration(securedice_parse_configuration_file($path));
 }
 
-putenv('SECUREDICE_CONFIG_PATH=/home/rpglibrary/.securedice.env');
+$dreamHostConfigurationPath = '/home/rpglibrary/.securedice.env';
+
+if (
+    getenv('SECUREDICE_CONFIG_PATH') === false
+    && is_file($dreamHostConfigurationPath)
+) {
+    putenv('SECUREDICE_CONFIG_PATH=' . $dreamHostConfigurationPath);
+}
+
 securedice_load_configuration();
