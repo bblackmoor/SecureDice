@@ -157,6 +157,132 @@ function insert_result_delivery_message(
     ]);
 }
 
+function find_active_email_recipients(PDO $connection, array $recipients): array
+{
+    $eligible = [];
+    $activeCount = 0;
+    $lookup = $connection->prepare(
+        "SELECT id, email_ciphertext, delivery_mode
+        FROM recipients WHERE email_fingerprint = :fingerprint AND status = 'active'"
+    );
+
+    foreach ($recipients as $email) {
+        if (!is_string($email)) {
+            continue;
+        }
+
+        $lookup->execute([
+            ':fingerprint' => consent_fingerprint('recipient-email', $email),
+        ]);
+        $recipient = $lookup->fetch();
+
+        if (is_array($recipient)) {
+            $activeCount++;
+            $eligible[] = $recipient;
+        }
+    }
+
+    return ['recipients' => $eligible, 'active_count' => $activeCount];
+}
+
+function claim_result_delivery_recipient(
+    PDOStatement $claim,
+    PDOStatement $releaseClaim,
+    array $recipient,
+    string $resultId,
+    string $now
+): ?array {
+    $recipientId = (int) $recipient['id'];
+    $claim->execute([
+        ':recipient_id' => $recipientId,
+        ':result_id' => $resultId,
+        ':created_at' => $now,
+    ]);
+
+    if ($claim->rowCount() !== 1) {
+        return null;
+    }
+
+    if (!recipient_delivery_available($recipientId, (string) $recipient['delivery_mode'])) {
+        $releaseClaim->execute([
+            ':recipient_id' => $recipientId,
+            ':result_id' => $resultId,
+        ]);
+        return null;
+    }
+
+    return [
+        'recipient_id' => $recipientId,
+        'email' => consent_decrypt_string((string) $recipient['email_ciphertext']),
+    ];
+}
+
+function build_result_delivery_queue(
+    PDO $connection,
+    array $eligible,
+    string $resultId,
+    string $now
+): array {
+    $queue = [];
+    $claim = $connection->prepare(
+        'INSERT OR IGNORE INTO result_delivery_claims
+        (recipient_id, result_id, created_at)
+        VALUES (:recipient_id, :result_id, :created_at)'
+    );
+    $releaseClaim = $connection->prepare(
+        'DELETE FROM result_delivery_claims
+        WHERE recipient_id = :recipient_id AND result_id = :result_id'
+    );
+
+    foreach ($eligible as $recipient) {
+        $queuedRecipient = claim_result_delivery_recipient(
+            $claim,
+            $releaseClaim,
+            $recipient,
+            $resultId,
+            $now
+        );
+
+        if ($queuedRecipient !== null) {
+            $queue[] = $queuedRecipient;
+        }
+    }
+
+    return $queue;
+}
+
+function insert_email_request(
+    PDO $connection,
+    string $publicId,
+    string $resultId,
+    string $sourceIp,
+    int $intendedCount,
+    int $activeCount,
+    int $notOptedInCount,
+    int $queuedCount,
+    string $now
+): int {
+    $request = $connection->prepare(
+        'INSERT INTO email_requests
+        (public_id, result_id, source_bucket, intended_count, opted_in_count,
+            not_opted_in_count, not_queued_count, created_at)
+        VALUES (:public_id, :result_id, :source_bucket, :intended_count, :opted_in_count,
+            :not_opted_in_count, :not_queued_count, :created_at)'
+    );
+    $request->execute([
+        ':public_id' => $publicId,
+        ':result_id' => $resultId,
+        ':source_bucket' => consent_fingerprint('email-source', $sourceIp),
+        ':intended_count' => $intendedCount,
+        ':opted_in_count' => $activeCount,
+        ':not_opted_in_count' => $notOptedInCount,
+        ':not_queued_count' => $activeCount - $queuedCount,
+        ':created_at' => $now,
+    ]);
+
+    return (int) $connection->lastInsertId();
+}
+
 /** Queue one verified result for every active address without revealing address state. */
 function request_result_email(string $resultId, string $submittedRecipients, string $sourceIp): array
 {
@@ -169,29 +295,9 @@ function request_result_email(string $resultId, string $submittedRecipients, str
     $recipients = parse_email_recipients($submittedRecipients);
     enforce_consent_rate_limit('result-email-ip-hour', $sourceIp, 300, 3600);
     $connection = result_storage_connection();
-    $eligible = [];
-    $activeCount = 0;
-
-    foreach ($recipients as $email) {
-        if (!is_string($email)) {
-            continue;
-        }
-
-        $lookup = $connection->prepare(
-            "SELECT id, email_ciphertext, delivery_mode
-            FROM recipients WHERE email_fingerprint = :fingerprint AND status = 'active'"
-        );
-        $lookup->execute([
-            ':fingerprint' => consent_fingerprint('recipient-email', $email),
-        ]);
-        $recipient = $lookup->fetch();
-
-        if (is_array($recipient)) {
-            $activeCount++;
-            $eligible[] = $recipient;
-        }
-    }
-
+    $active = find_active_email_recipients($connection, $recipients);
+    $eligible = $active['recipients'];
+    $activeCount = (int) $active['active_count'];
     $intendedCount = count($recipients);
     $notOptedInCount = $intendedCount - $activeCount;
 
@@ -208,63 +314,18 @@ function request_result_email(string $resultId, string $submittedRecipients, str
     $connection->beginTransaction();
 
     try {
-        $queue = [];
-        $claim = $connection->prepare(
-            'INSERT OR IGNORE INTO result_delivery_claims
-            (recipient_id, result_id, created_at)
-            VALUES (:recipient_id, :result_id, :created_at)'
+        $queue = build_result_delivery_queue($connection, $eligible, $normalizedResultId, $now);
+        $requestId = insert_email_request(
+            $connection,
+            $publicId,
+            $normalizedResultId,
+            $sourceIp,
+            $intendedCount,
+            $activeCount,
+            $notOptedInCount,
+            count($queue),
+            $now
         );
-        $releaseClaim = $connection->prepare(
-            'DELETE FROM result_delivery_claims
-            WHERE recipient_id = :recipient_id AND result_id = :result_id'
-        );
-
-        foreach ($eligible as $recipient) {
-            $recipientId = (int) $recipient['id'];
-            $claim->execute([
-                ':recipient_id' => $recipientId,
-                ':result_id' => $normalizedResultId,
-                ':created_at' => $now,
-            ]);
-
-            // A recipient-result pair is deliverable once. Replays neither
-            // enqueue mail nor consume the recipient's delivery allowance.
-            if ($claim->rowCount() !== 1) {
-                continue;
-            }
-
-            if (!recipient_delivery_available($recipientId, (string) $recipient['delivery_mode'])) {
-                $releaseClaim->execute([
-                    ':recipient_id' => $recipientId,
-                    ':result_id' => $normalizedResultId,
-                ]);
-                continue;
-            }
-
-            $queue[] = [
-                'recipient_id' => $recipientId,
-                'email' => consent_decrypt_string((string) $recipient['email_ciphertext']),
-            ];
-        }
-
-        $request = $connection->prepare(
-            'INSERT INTO email_requests
-            (public_id, result_id, source_bucket, intended_count, opted_in_count,
-                not_opted_in_count, not_queued_count, created_at)
-            VALUES (:public_id, :result_id, :source_bucket, :intended_count, :opted_in_count,
-                :not_opted_in_count, :not_queued_count, :created_at)'
-        );
-        $request->execute([
-            ':public_id' => $publicId,
-            ':result_id' => $normalizedResultId,
-            ':source_bucket' => consent_fingerprint('email-source', $sourceIp),
-            ':intended_count' => $intendedCount,
-            ':opted_in_count' => $activeCount,
-            ':not_opted_in_count' => $notOptedInCount,
-            ':not_queued_count' => $activeCount - count($queue),
-            ':created_at' => $now,
-        ]);
-        $requestId = (int) $connection->lastInsertId();
 
         foreach ($queue as $recipient) {
             insert_result_delivery_message(
@@ -289,6 +350,82 @@ function request_result_email(string $resultId, string $submittedRecipients, str
     return ['accepted' => true, 'request_id' => $publicId];
 }
 
+function recover_stale_email_claims(PDO $connection, string $now, string $stale): void
+{
+    $recover = $connection->prepare(
+        "UPDATE outbound_messages
+        SET status = 'pending', lease_token = NULL, claimed_at = NULL,
+            available_at = :now, last_error = 'worker_abandoned'
+        WHERE status = 'sending' AND claimed_at < :stale"
+    );
+    $recover->execute([':now' => $now, ':stale' => $stale]);
+}
+
+function find_email_batch(PDO $connection, string $now): array
+{
+    $first = $connection->prepare(
+        "SELECT * FROM outbound_messages
+        WHERE status = 'pending' AND available_at <= :now
+        ORDER BY available_at, id LIMIT 1"
+    );
+    $first->execute([':now' => $now]);
+    $message = $first->fetch();
+
+    if (!is_array($message)) {
+        return [];
+    }
+
+    $messages = [$message];
+
+    if ($message['message_type'] !== 'result_delivery') {
+        return $messages;
+    }
+
+    $batch = $connection->prepare(
+        "SELECT * FROM outbound_messages
+        WHERE id <> :id AND recipient_id = :recipient_id
+            AND message_type = 'result_delivery' AND status = 'pending'
+            AND (available_at <= :now OR (attempts = 0 AND created_at <= :now))
+        ORDER BY created_at, id LIMIT 19"
+    );
+    $batch->execute([
+        ':id' => (int) $message['id'],
+        ':recipient_id' => (int) $message['recipient_id'],
+        ':now' => $now,
+    ]);
+
+    return array_merge($messages, $batch->fetchAll());
+}
+
+function mark_email_batch_claimed(
+    PDO $connection,
+    array $messages,
+    string $now,
+    string $leaseToken
+): void {
+    $ids = array_map(static fn (array $item): int => (int) $item['id'], $messages);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $claim = $connection->prepare(
+        "UPDATE outbound_messages SET status = 'sending', claimed_at = ?, lease_token = ?,
+            attempts = attempts + 1 WHERE status = 'pending' AND id IN ({$placeholders})"
+    );
+    $claim->execute(array_merge([$now, $leaseToken], $ids));
+
+    if ($claim->rowCount() !== count($ids)) {
+        throw new RuntimeException('The email queue claim was not atomic.');
+    }
+
+    $history = $connection->prepare(
+        "UPDATE email_delivery_history SET status = 'retrying',
+            attempt_count = attempt_count + 1, last_attempt_at = :now
+        WHERE message_id = :message_id"
+    );
+
+    foreach ($ids as $id) {
+        $history->execute([':now' => $now, ':message_id' => $id]);
+    }
+}
+
 function claim_email_batch(?int $nowUnix = null): array
 {
     $connection = result_storage_connection();
@@ -299,67 +436,15 @@ function claim_email_batch(?int $nowUnix = null): array
     $connection->beginTransaction();
 
     try {
-        $recover = $connection->prepare(
-            "UPDATE outbound_messages
-            SET status = 'pending', lease_token = NULL, claimed_at = NULL,
-                available_at = :now, last_error = 'worker_abandoned'
-            WHERE status = 'sending' AND claimed_at < :stale"
-        );
-        $recover->execute([':now' => $now, ':stale' => $stale]);
+        recover_stale_email_claims($connection, $now, $stale);
+        $messages = find_email_batch($connection, $now);
 
-        $first = $connection->prepare(
-            "SELECT * FROM outbound_messages
-            WHERE status = 'pending' AND available_at <= :now
-            ORDER BY available_at, id LIMIT 1"
-        );
-        $first->execute([':now' => $now]);
-        $message = $first->fetch();
-
-        if (!is_array($message)) {
+        if ($messages === []) {
             $connection->commit();
             return [];
         }
 
-        $messages = [$message];
-
-        if ($message['message_type'] === 'result_delivery') {
-            $batch = $connection->prepare(
-                "SELECT * FROM outbound_messages
-                WHERE id <> :id AND recipient_id = :recipient_id
-                    AND message_type = 'result_delivery' AND status = 'pending'
-                    AND (available_at <= :now OR (attempts = 0 AND created_at <= :now))
-                ORDER BY created_at, id LIMIT 19"
-            );
-            $batch->execute([
-                ':id' => (int) $message['id'],
-                ':recipient_id' => (int) $message['recipient_id'],
-                ':now' => $now,
-            ]);
-            $messages = array_merge($messages, $batch->fetchAll());
-        }
-
-        $ids = array_map(static fn (array $item): int => (int) $item['id'], $messages);
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $claim = $connection->prepare(
-            "UPDATE outbound_messages SET status = 'sending', claimed_at = ?, lease_token = ?,
-                attempts = attempts + 1 WHERE status = 'pending' AND id IN ({$placeholders})"
-        );
-        $claim->execute(array_merge([$now, $leaseToken], $ids));
-
-        if ($claim->rowCount() !== count($ids)) {
-            throw new RuntimeException('The email queue claim was not atomic.');
-        }
-
-        $history = $connection->prepare(
-            "UPDATE email_delivery_history SET status = 'retrying',
-                attempt_count = attempt_count + 1, last_attempt_at = :now
-            WHERE message_id = :message_id"
-        );
-
-        foreach ($ids as $id) {
-            $history->execute([':now' => $now, ':message_id' => $id]);
-        }
-
+        mark_email_batch_claimed($connection, $messages, $now, $leaseToken);
         $connection->commit();
     } catch (Throwable $e) {
         if ($connection->inTransaction()) {
@@ -526,13 +611,8 @@ function email_result_plain_text(array $data): string
     return implode("\n", $lines);
 }
 
-function build_email_message(array $messages): array
+function build_consent_email_message(string $type, string $email, array $payload): ?array
 {
-    $first = $messages[0];
-    $payload = consent_decrypt_payload((string) $first['payload_ciphertext']);
-    $email = (string) $payload['email'];
-    $type = (string) $first['message_type'];
-
     if ($type === 'consent_confirmation') {
         $url = email_url('confirm.php?token=' . rawurlencode((string) $payload['confirmation_token']));
         $body = "Confirm that this address may receive Secure Dice results:\n\n{$url}\n\n"
@@ -555,42 +635,64 @@ function build_email_message(array $messages): array
         return ['to' => $email, 'subject' => 'Secure Dice email opt-in confirmed', 'text' => $body];
     }
 
+    return null;
+}
+
+function load_email_request_counts(int $requestId): ?array
+{
+    $request = result_storage_connection()->prepare(
+        'SELECT intended_count, opted_in_count, not_opted_in_count, not_queued_count
+        FROM email_requests WHERE id = :id'
+    );
+    $request->execute([':id' => $requestId]);
+    $counts = $request->fetch();
+
+    return is_array($counts) ? $counts : null;
+}
+
+function build_result_email_section(array $message): string
+{
+    $record = load_result_record((string) $message['result_id']);
+
+    if ($record === null) {
+        throw new ResultIntegrityException('A queued result no longer exists.');
+    }
+
+    $counts = load_email_request_counts((int) $message['request_id']);
+    $verify = email_url('verify.php?id=' . rawurlencode((string) $message['result_id']));
+    $section = "Secure Dice result {$message['result_id']}\n"
+        . email_result_plain_text($record['data']) . "\nVerify: {$verify}";
+
+    if ($counts !== null) {
+        $section .= "\n\nDelivery was requested for {$counts['intended_count']} recipient(s). "
+            . "{$counts['opted_in_count']} were opted in. "
+            . "{$counts['not_opted_in_count']} were not opted in and were not sent this result.";
+
+        if ((int) $counts['not_queued_count'] > 0) {
+            $section .= "\n{$counts['not_queued_count']} opted-in recipient(s) were not queued because of delivery settings or limits.";
+        }
+    }
+
+    return $section;
+}
+
+function build_email_message(array $messages): array
+{
+    $first = $messages[0];
+    $payload = consent_decrypt_payload((string) $first['payload_ciphertext']);
+    $email = (string) $payload['email'];
+    $type = (string) $first['message_type'];
+    $consentMessage = build_consent_email_message($type, $email, $payload);
+
+    if ($consentMessage !== null) {
+        return $consentMessage;
+    }
+
     $unsubscribeToken = isset($payload['unsubscribe_token'])
         ? validate_long_consent_token((string) $payload['unsubscribe_token'])
         : issue_recipient_unsubscribe_token((int) $first['recipient_id']);
     $unsubscribe = email_url('unsubscribe.php?token=' . rawurlencode($unsubscribeToken));
-    $sections = [];
-
-    foreach ($messages as $message) {
-        $record = load_result_record((string) $message['result_id']);
-
-        if ($record === null) {
-            throw new ResultIntegrityException('A queued result no longer exists.');
-        }
-
-        $request = result_storage_connection()->prepare(
-            'SELECT intended_count, opted_in_count, not_opted_in_count, not_queued_count
-            FROM email_requests WHERE id = :id'
-        );
-        $request->execute([':id' => (int) $message['request_id']]);
-        $counts = $request->fetch();
-        $verify = email_url('verify.php?id=' . rawurlencode((string) $message['result_id']));
-        $section = "Secure Dice result {$message['result_id']}\n"
-            . email_result_plain_text($record['data']) . "\nVerify: {$verify}";
-
-        if (is_array($counts)) {
-            $section .= "\n\nDelivery was requested for {$counts['intended_count']} recipient(s). "
-                . "{$counts['opted_in_count']} were opted in. "
-                . "{$counts['not_opted_in_count']} were not opted in and were not sent this result.";
-
-            if ((int) $counts['not_queued_count'] > 0) {
-                $section .= "\n{$counts['not_queued_count']} opted-in recipient(s) were not queued because of delivery settings or limits.";
-            }
-        }
-
-        $sections[] = $section;
-    }
-
+    $sections = array_map('build_result_email_section', $messages);
     $body = implode("\n\n----------------------------------------\n\n", $sections)
         . "\n\nStop all Secure Dice email:\n{$unsubscribe}";
 
@@ -601,6 +703,19 @@ function build_email_message(array $messages): array
             : 'Secure Dice result',
         'text' => $body,
     ];
+}
+
+function email_recipient_is_available(array $message): bool
+{
+    $recipient = result_storage_connection()->prepare(
+        'SELECT status, delivery_mode FROM recipients WHERE id = :id'
+    );
+    $recipient->execute([':id' => (int) $message['recipient_id']]);
+    $state = $recipient->fetch();
+
+    return is_array($state)
+        && $state['status'] === 'active'
+        && ($message['message_type'] !== 'result_delivery' || $state['delivery_mode'] !== 'paused');
 }
 
 function process_email_queue(callable $transport, int $limit = 50): array
@@ -625,17 +740,8 @@ function process_email_queue(callable $transport, int $limit = 50): array
         }
 
         $processed += count($messages);
-        $recipient = result_storage_connection()->prepare(
-            "SELECT status, delivery_mode FROM recipients WHERE id = :id"
-        );
-        $recipient->execute([':id' => (int) $messages[0]['recipient_id']]);
-        $state = $recipient->fetch();
 
-        if (
-            !is_array($state)
-            || $state['status'] !== 'active'
-            || ($messages[0]['message_type'] === 'result_delivery' && $state['delivery_mode'] === 'paused')
-        ) {
+        if (!email_recipient_is_available($messages[0])) {
             cancel_email_batch($messages, 'recipient_unavailable');
             $failed += count($messages);
             continue;
