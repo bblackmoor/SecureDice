@@ -79,7 +79,7 @@ security_test_assert(
     'Stored results are not authenticated with a server-secret HMAC.'
 );
 security_test_assert(
-    str_contains($storage, 'PRIMARY KEY (recipient_id, result_id)'),
+    str_contains(security_test_file('mysql-schema.php'), 'PRIMARY KEY (recipient_id, result_id)'),
     'Permanent recipient-result replay protection is missing.'
 );
 

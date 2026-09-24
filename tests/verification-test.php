@@ -2,12 +2,9 @@
 
 declare(strict_types=1);
 
-$databasePath = sys_get_temp_dir()
-    . '/securedice-verification-test-'
-    . bin2hex(random_bytes(8))
-    . '.sqlite';
+require_once __DIR__ . '/mysql-test-bootstrap.php';
+securedice_test_reset();
 
-putenv('SECUREDICE_DB_PATH=' . $databasePath);
 putenv('SECUREDICE_SECRET=' . str_repeat('32', 32));
 
 require_once dirname(__DIR__) . '/storage.php';
@@ -23,7 +20,7 @@ function insert_verification_test_record(array $result, string $digest, ?string 
 {
     $canonicalJson = encode_canonical_result($result);
     $statement = result_storage_connection()->prepare(
-        'INSERT INTO result_records (
+        'INSERT INTO sd2_result_records (
             public_id,
             schema_version,
             generated_at,
@@ -184,9 +181,5 @@ try {
 
     echo "Verification tests passed.\n";
 } finally {
-    foreach ([$databasePath, $databasePath . '-shm', $databasePath . '-wal'] as $path) {
-        if (file_exists($path)) {
-            @unlink($path);
-        }
-    }
+    // The dedicated test database is reset before the next test.
 }

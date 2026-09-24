@@ -2,12 +2,9 @@
 
 declare(strict_types=1);
 
-$databasePath = sys_get_temp_dir()
-    . '/securedice-storage-test-'
-    . bin2hex(random_bytes(8))
-    . '.sqlite';
+require_once __DIR__ . '/mysql-test-bootstrap.php';
+securedice_test_reset();
 
-putenv('SECUREDICE_DB_PATH=' . $databasePath);
 putenv('SECUREDICE_SECRET=' . str_repeat('31', 32));
 
 require_once dirname(__DIR__) . '/storage.php';
@@ -49,12 +46,12 @@ try {
 
     $connection = result_storage_connection();
     storage_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 5,
+        (string) $connection->query("SELECT meta_value FROM sd2_schema_meta WHERE meta_key = 'schema_version'")->fetchColumn() === '1',
         'The result database schema version was not initialized.'
     );
     $statement = $connection->prepare(
         'SELECT canonical_json, content_sha256, auth_hmac_sha256
-        FROM result_records
+        FROM sd2_result_records
         WHERE public_id = :public_id'
     );
     $statement->execute([':public_id' => $stored['result_id']]);
@@ -80,15 +77,16 @@ try {
         'The stored result authentication code is invalid.'
     );
 
-    $updateWasRejected = false;
-
+    // Shared DreamHost MySQL cannot create triggers. A direct database edit
+    // must still be detected by the application authentication check.
+    $connection->exec("UPDATE sd2_result_records SET canonical_json = '{}'");
+    $tamperingDetected = false;
     try {
-        $connection->exec("UPDATE result_records SET canonical_json = '{}'");
-    } catch (PDOException $e) {
-        $updateWasRejected = true;
+        load_result_record($stored['result_id']);
+    } catch (ResultIntegrityException $e) {
+        $tamperingDetected = true;
     }
-
-    storage_test_assert($updateWasRejected, 'The database allowed an immutable result to be updated.');
+    storage_test_assert($tamperingDetected, 'A direct database edit passed verification.');
 
     $second = store_result_record($payload);
     storage_test_assert(
@@ -98,9 +96,5 @@ try {
 
     echo "Storage tests passed.\n";
 } finally {
-    foreach ([$databasePath, $databasePath . '-shm', $databasePath . '-wal'] as $path) {
-        if (file_exists($path)) {
-            @unlink($path);
-        }
-    }
+    // The dedicated test database is reset before the next test.
 }

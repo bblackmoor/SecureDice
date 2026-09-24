@@ -4,467 +4,59 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/mysql-schema.php';
 
-class InvalidResultIdException extends RuntimeException
+class InvalidResultIdException extends RuntimeException {}
+class ResultIntegrityException extends RuntimeException {}
+class UnsupportedResultSchemaException extends RuntimeException {}
+
+/** Create a connection using the private DreamHost MySQL credentials. */
+function securedice_mysql_connection(bool $buffered = true): PDO
 {
-}
-
-class ResultIntegrityException extends RuntimeException
-{
-}
-
-class UnsupportedResultSchemaException extends RuntimeException
-{
-}
-
-/**
- * Return the SQLite database path used for immutable result records.
- *
- * Production deployments should set SECUREDICE_DB_PATH to a location outside
- * the web root. The bundled data directory is protected for Apache installs
- * and provides a zero-configuration default for small deployments.
- */
-function result_storage_path(): string
-{
-    $configuredPath = getenv('SECUREDICE_DB_PATH');
-
-    if ($configuredPath !== false && trim($configuredPath) !== '') {
-        return trim($configuredPath);
+    if (!in_array('mysql', PDO::getAvailableDrivers(), true)) {
+        throw new RuntimeException('Secure Dice requires PDO MySQL.');
     }
 
-    return __DIR__ . '/data/securedice.sqlite';
+    $host = trim((string) getenv('SECUREDICE_DB_HOST'));
+    $name = trim((string) getenv('SECUREDICE_DB_NAME'));
+    $user = trim((string) getenv('SECUREDICE_DB_USER'));
+    $password = getenv('SECUREDICE_DB_PASSWORD');
+    $port = getenv('SECUREDICE_DB_PORT');
+    $port = $port === false || $port === '' ? '3306' : trim($port);
+    if ($host === '' || $name === '' || $user === '' || $password === false
+        || !ctype_digit($port) || (int) $port < 1 || (int) $port > 65535) {
+        throw new RuntimeException('Secure Dice MySQL configuration is incomplete.');
+    }
+
+    return new PDO(
+        "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4",
+        $user,
+        $password,
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => $buffered,
+        ]
+    );
 }
 
-/**
- * Open the result database and create its schema when necessary.
- */
 function result_storage_connection(): PDO
 {
     static $connection = null;
-
     if ($connection instanceof PDO) {
         return $connection;
     }
 
-    if (!class_exists('PDO') || !in_array('sqlite', PDO::getAvailableDrivers(), true)) {
-        error_log('Secure Dice result storage requires the PDO SQLite extension.');
-        throw new RuntimeException('The roll could not be stored. Please try again later.');
-    }
-
-    $databasePath = result_storage_path();
-    $databaseDirectory = dirname($databasePath);
-
-    if (!is_dir($databaseDirectory) || !is_writable($databaseDirectory)) {
-        error_log('Secure Dice result storage directory is missing or not writable.');
-        throw new RuntimeException('The roll could not be stored. Please try again later.');
-    }
-
     try {
-        $connection = new PDO(
-            'sqlite:' . $databasePath,
-            null,
-            null,
-            [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ]
-        );
-
-        $connection->exec('PRAGMA busy_timeout = 5000');
-        $connection->exec('PRAGMA foreign_keys = ON');
-        $connection->query('PRAGMA journal_mode = WAL');
+        $connection = securedice_mysql_connection();
         initialize_result_storage($connection);
-
-        harden_result_storage_permissions($databasePath);
     } catch (Throwable $e) {
         $connection = null;
         error_log('Secure Dice result storage error: ' . $e->getMessage());
-        throw new RuntimeException('The roll could not be stored. Please try again later.');
+        throw new RuntimeException('The result database could not be opened.');
     }
-
     return $connection;
-}
-
-/** Restrict the database and SQLite sidecar files to the PHP process owner. */
-function harden_result_storage_permissions(string $databasePath): void
-{
-    foreach ([$databasePath, $databasePath . '-shm', $databasePath . '-wal'] as $path) {
-        if (file_exists($path)) {
-            @chmod($path, 0600);
-        }
-    }
-}
-
-/**
- * Create the immutable result table and update guard shared by every schema.
- */
-function create_result_records_schema(PDO $connection): void
-{
-    $connection->exec(
-        'CREATE TABLE IF NOT EXISTS result_records (
-            public_id TEXT PRIMARY KEY CHECK (length(public_id) = 32),
-            schema_version INTEGER NOT NULL,
-            generated_at TEXT NOT NULL,
-            canonical_json TEXT NOT NULL,
-            content_sha256 TEXT NOT NULL CHECK (length(content_sha256) = 64),
-            stored_at TEXT NOT NULL
-        ) WITHOUT ROWID'
-    );
-
-    create_result_records_update_guard($connection, true);
-}
-
-function create_result_records_update_guard(PDO $connection, bool $ifNotExists = false): void
-{
-    $qualifier = $ifNotExists ? ' IF NOT EXISTS' : '';
-    $connection->exec(
-        "CREATE TRIGGER{$qualifier} result_records_prevent_update
-        BEFORE UPDATE ON result_records
-        BEGIN
-            SELECT RAISE(ABORT, 'result records are immutable');
-        END"
-    );
-}
-
-function migrate_result_storage_to_v2(PDO $connection): void
-{
-    $connection->exec(
-        "CREATE TABLE IF NOT EXISTS recipients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email_fingerprint TEXT NOT NULL UNIQUE CHECK (length(email_fingerprint) = 64),
-            email_ciphertext TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'revoked')),
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            confirmed_at TEXT,
-            revoked_at TEXT
-        )"
-    );
-    $connection->exec(
-        'CREATE TABLE IF NOT EXISTS consent_challenges (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recipient_id INTEGER NOT NULL,
-            token_hash TEXT NOT NULL UNIQUE CHECK (length(token_hash) = 64),
-            expires_at TEXT NOT NULL,
-            consumed_at TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
-        )'
-    );
-    $connection->exec(
-        "CREATE TABLE IF NOT EXISTS recipient_capabilities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recipient_id INTEGER NOT NULL,
-            code_hash TEXT NOT NULL UNIQUE CHECK (length(code_hash) = 64),
-            status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
-            created_at TEXT NOT NULL,
-            revoked_at TEXT,
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
-        )"
-    );
-    $connection->exec(
-        "CREATE TABLE IF NOT EXISTS recipient_management_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recipient_id INTEGER NOT NULL,
-            token_hash TEXT NOT NULL UNIQUE CHECK (length(token_hash) = 64),
-            status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
-            created_at TEXT NOT NULL,
-            revoked_at TEXT,
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
-        )"
-    );
-    $connection->exec(
-        "CREATE TABLE IF NOT EXISTS outbound_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            message_type TEXT NOT NULL CHECK (message_type IN ('consent_confirmation')),
-            recipient_id INTEGER NOT NULL,
-            payload_ciphertext TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
-            attempts INTEGER NOT NULL DEFAULT 0,
-            available_at TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            sent_at TEXT,
-            last_error TEXT,
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
-        )"
-    );
-    $connection->exec(
-        'CREATE TABLE IF NOT EXISTS rate_limits (
-            bucket_key TEXT PRIMARY KEY CHECK (length(bucket_key) = 64),
-            window_started_at INTEGER NOT NULL,
-            attempts INTEGER NOT NULL
-        ) WITHOUT ROWID'
-    );
-    $connection->exec(
-        'CREATE INDEX IF NOT EXISTS consent_challenges_recipient
-        ON consent_challenges(recipient_id, consumed_at, expires_at)'
-    );
-    $connection->exec(
-        'CREATE INDEX IF NOT EXISTS recipient_capabilities_recipient
-        ON recipient_capabilities(recipient_id, status)'
-    );
-    $connection->exec(
-        'CREATE INDEX IF NOT EXISTS recipient_management_recipient
-        ON recipient_management_tokens(recipient_id, status)'
-    );
-    $connection->exec(
-        'CREATE INDEX IF NOT EXISTS outbound_messages_pending
-        ON outbound_messages(status, available_at)'
-    );
-    $connection->exec('PRAGMA user_version = 2');
-}
-
-function migrate_result_storage_to_v3(PDO $connection): void
-{
-    $connection->exec(
-        "ALTER TABLE consent_challenges
-        ADD COLUMN purpose TEXT NOT NULL DEFAULT 'enroll'
-        CHECK (purpose IN ('enroll', 'management_recovery'))"
-    );
-    $connection->exec(
-        "CREATE TABLE outbound_messages_v3 (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            message_type TEXT NOT NULL CHECK (
-                message_type IN ('consent_confirmation', 'management_recovery', 'consent_credentials')
-            ),
-            recipient_id INTEGER NOT NULL,
-            payload_ciphertext TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
-            attempts INTEGER NOT NULL DEFAULT 0,
-            available_at TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            sent_at TEXT,
-            last_error TEXT,
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
-        )"
-    );
-    $connection->exec(
-        'INSERT INTO outbound_messages_v3
-        (id, message_type, recipient_id, payload_ciphertext, status, attempts,
-            available_at, created_at, sent_at, last_error)
-        SELECT id, message_type, recipient_id, payload_ciphertext,
-            CASE WHEN status = \'sending\' THEN \'pending\' ELSE status END, attempts,
-            available_at, created_at, sent_at, last_error
-        FROM outbound_messages'
-    );
-    $connection->exec('DROP TABLE outbound_messages');
-    $connection->exec('ALTER TABLE outbound_messages_v3 RENAME TO outbound_messages');
-    $connection->exec(
-        'CREATE TABLE recipient_unsubscribe_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recipient_id INTEGER NOT NULL,
-            token_hash TEXT NOT NULL UNIQUE CHECK (length(token_hash) = 64),
-            created_at TEXT NOT NULL,
-            used_at TEXT,
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
-        )'
-    );
-    $connection->exec(
-        'CREATE INDEX outbound_messages_pending
-        ON outbound_messages(status, available_at)'
-    );
-    $connection->exec(
-        'CREATE INDEX recipient_unsubscribe_recipient
-        ON recipient_unsubscribe_tokens(recipient_id, used_at)'
-    );
-    $connection->exec('PRAGMA user_version = 3');
-}
-
-function migrate_result_storage_to_v4(PDO $connection): void
-{
-    $connection->exec(
-        "ALTER TABLE recipients
-        ADD COLUMN delivery_mode TEXT NOT NULL DEFAULT 'tabletop'
-        CHECK (delivery_mode IN ('tabletop', 'occasional', 'paused'))"
-    );
-    $connection->exec(
-        'CREATE TABLE email_requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            public_id TEXT NOT NULL UNIQUE CHECK (length(public_id) = 32),
-            result_id TEXT NOT NULL,
-            source_bucket TEXT NOT NULL CHECK (length(source_bucket) = 64),
-            intended_count INTEGER NOT NULL,
-            opted_in_count INTEGER NOT NULL,
-            not_opted_in_count INTEGER NOT NULL,
-            not_queued_count INTEGER NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (result_id) REFERENCES result_records(public_id)
-        )'
-    );
-    $connection->exec(
-        "CREATE TABLE outbound_messages_v4 (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            message_type TEXT NOT NULL CHECK (
-                message_type IN (
-                    'consent_confirmation', 'management_recovery',
-                    'consent_credentials', 'result_delivery'
-                )
-            ),
-            recipient_id INTEGER NOT NULL,
-            request_id INTEGER,
-            result_id TEXT,
-            payload_ciphertext TEXT,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
-            attempts INTEGER NOT NULL DEFAULT 0,
-            available_at TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            claimed_at TEXT,
-            lease_token TEXT,
-            sent_at TEXT,
-            last_error TEXT,
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE,
-            FOREIGN KEY (request_id) REFERENCES email_requests(id),
-            FOREIGN KEY (result_id) REFERENCES result_records(public_id)
-        )"
-    );
-    $connection->exec(
-        'INSERT INTO outbound_messages_v4
-        (id, message_type, recipient_id, payload_ciphertext, status, attempts,
-            available_at, created_at, sent_at, last_error)
-        SELECT id, message_type, recipient_id, payload_ciphertext,
-            CASE WHEN status = \'sending\' THEN \'pending\' ELSE status END, attempts,
-            available_at, created_at, sent_at, last_error
-        FROM outbound_messages'
-    );
-    $connection->exec('DROP TABLE outbound_messages');
-    $connection->exec('ALTER TABLE outbound_messages_v4 RENAME TO outbound_messages');
-    $connection->exec(
-        "CREATE TABLE email_delivery_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            message_id INTEGER NOT NULL,
-            request_id INTEGER,
-            recipient_id INTEGER NOT NULL,
-            result_id TEXT,
-            message_type TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('queued', 'retrying', 'sent', 'failed', 'cancelled')),
-            attempt_count INTEGER NOT NULL DEFAULT 0,
-            queued_at TEXT NOT NULL,
-            last_attempt_at TEXT,
-            delivered_at TEXT,
-            error_category TEXT,
-            provider_message_id TEXT,
-            UNIQUE (message_id),
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE,
-            FOREIGN KEY (request_id) REFERENCES email_requests(id),
-            FOREIGN KEY (result_id) REFERENCES result_records(public_id)
-        )"
-    );
-    $connection->exec(
-        "INSERT INTO email_delivery_history
-        (message_id, recipient_id, message_type, status, attempt_count,
-            queued_at, delivered_at, error_category)
-        SELECT id, recipient_id, message_type,
-            CASE
-                WHEN status = 'sent' THEN 'sent'
-                WHEN status = 'failed' THEN 'failed'
-                ELSE 'queued'
-            END,
-            attempts, created_at, sent_at,
-            CASE WHEN status = 'failed' THEN 'legacy' ELSE NULL END
-        FROM outbound_messages"
-    );
-    $connection->exec(
-        'CREATE INDEX outbound_messages_pending
-        ON outbound_messages(status, available_at)'
-    );
-    $connection->exec(
-        'CREATE INDEX outbound_messages_recipient_batch
-        ON outbound_messages(recipient_id, message_type, status, created_at)'
-    );
-    $connection->exec(
-        'CREATE INDEX email_history_recipient
-        ON email_delivery_history(recipient_id, queued_at)'
-    );
-
-    // Schema 4 replaces permanent recipient share codes with direct,
-    // server-side address lookup after one-time opt-in confirmation.
-    $connection->exec(
-        "UPDATE recipient_capabilities
-        SET status = 'revoked', revoked_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-        WHERE status = 'active'"
-    );
-    $connection->exec('PRAGMA user_version = 4');
-}
-
-function migrate_result_storage_to_v5(PDO $connection): void
-{
-    $connection->exec(
-        'ALTER TABLE result_records ADD COLUMN auth_hmac_sha256 TEXT'
-    );
-    $connection->exec('DROP TRIGGER IF EXISTS result_records_prevent_update');
-
-    $records = $connection->query(
-        'SELECT public_id, canonical_json FROM result_records'
-    );
-    $authenticate = $connection->prepare(
-        'UPDATE result_records SET auth_hmac_sha256 = :hmac WHERE public_id = :public_id'
-    );
-
-    foreach ($records as $record) {
-        $authenticate->execute([
-            ':hmac' => result_authentication_hmac((string) $record['canonical_json']),
-            ':public_id' => (string) $record['public_id'],
-        ]);
-    }
-
-    create_result_records_update_guard($connection);
-    $connection->exec(
-        'CREATE TABLE result_delivery_claims (
-            recipient_id INTEGER NOT NULL,
-            result_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            PRIMARY KEY (recipient_id, result_id),
-            FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE,
-            FOREIGN KEY (result_id) REFERENCES result_records(public_id)
-        ) WITHOUT ROWID'
-    );
-    $connection->exec(
-        "INSERT OR IGNORE INTO result_delivery_claims (recipient_id, result_id, created_at)
-        SELECT recipient_id, result_id, MIN(created_at)
-        FROM outbound_messages
-        WHERE message_type = 'result_delivery' AND result_id IS NOT NULL
-        GROUP BY recipient_id, result_id"
-    );
-    $connection->exec('PRAGMA user_version = 5');
-}
-
-/**
- * Create the insert-only result table and migrate the database when necessary.
- */
-function initialize_result_storage(PDO $connection): void
-{
-    $storageSchemaVersion = (int) $connection->query('PRAGMA user_version')->fetchColumn();
-
-    if ($storageSchemaVersion > 5) {
-        throw new RuntimeException('The result database uses a newer schema.');
-    }
-
-    $connection->beginTransaction();
-
-    try {
-        create_result_records_schema($connection);
-
-        if ($storageSchemaVersion < 2) {
-            migrate_result_storage_to_v2($connection);
-        }
-        if ($storageSchemaVersion < 3) {
-            migrate_result_storage_to_v3($connection);
-        }
-        if ($storageSchemaVersion < 4) {
-            migrate_result_storage_to_v4($connection);
-        }
-        if ($storageSchemaVersion < 5) {
-            migrate_result_storage_to_v5($connection);
-        }
-
-        $connection->commit();
-    } catch (Throwable $e) {
-        if ($connection->inTransaction()) {
-            $connection->rollBack();
-        }
-
-        throw $e;
-    }
 }
 
 /**
@@ -527,8 +119,8 @@ function result_authentication_hmac(string $canonicalJson): string
 /**
  * Persist one result and return the result augmented with its public ID.
  *
- * There is deliberately no update function. The database trigger also rejects
- * updates so later application changes cannot silently rewrite old results.
+ * There is deliberately no update function. Authentication detects direct
+ * database changes when a result is read.
  */
 function store_result_record(array $result): array
 {
@@ -549,7 +141,7 @@ function store_result_record(array $result): array
 
     try {
         $statement = result_storage_connection()->prepare(
-            'INSERT INTO result_records (
+            'INSERT INTO sd2_result_records (
                 public_id,
                 schema_version,
                 generated_at,
@@ -578,7 +170,6 @@ function store_result_record(array $result): array
             ':stored_at' => gmdate(DATE_ATOM),
         ]);
 
-        harden_result_storage_permissions(result_storage_path());
     } catch (Throwable $e) {
         error_log('Secure Dice result insert error: ' . $e->getMessage());
         throw new RuntimeException('The roll could not be stored. Please try again later.');
@@ -696,7 +287,7 @@ function load_result_record(string $publicId): ?array
                 content_sha256,
                 auth_hmac_sha256,
                 stored_at
-            FROM result_records
+            FROM sd2_result_records
             WHERE public_id = :public_id'
         );
         $statement->execute([':public_id' => $publicId]);

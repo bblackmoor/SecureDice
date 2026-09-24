@@ -126,13 +126,13 @@ Place the repository files in a PHP-enabled web directory and direct users to `s
 
 Secure Dice requires:
 
-- PHP with `random_int()`, session support, Sodium, PDO, and the PDO SQLite driver.
+- PHP with `random_int()`, session support, Sodium, PDO, and the PDO MySQL driver.
 - Composer for source installations. Release ZIPs already include production dependencies.
 - A web server capable of running PHP.
 - Browser cookies for the short-lived session that transfers a roll to its results page.
-- A writable directory for the SQLite result database.
+- Access to the `rpglibrary_org` MySQL database on `db.rpglibrary.org`.
 
-Secure Dice automatically creates `data/securedice.sqlite`. Apache access to the bundled `data` directory is denied by its `.htaccess` file. For production, placing the database outside the public web directory is strongly recommended.
+Secure Dice creates its `sd2_` MySQL tables in the configured database. Legacy rolls are kept separately in `sd2_legacy_rolls`; they cannot acquire Secure Dice 2 authentication retroactively.
 
 ### Private configuration
 
@@ -147,13 +147,17 @@ The completed file must remain outside the public website and must never be comm
 
 The parser accepts only documented `SECUREDICE_` keys, rejects duplicates and malformed values, and refuses a Unix configuration file readable or writable by group or other users. Blank lines and lines beginning with `#` are ignored. Values may be unquoted, single quoted, or double quoted as documented in the example.
 
-The private configuration should place the database outside the website:
+Set the existing private MySQL connection in the configuration:
 
 ```text
-SECUREDICE_DB_PATH=/absolute/private/path/securedice.sqlite
+SECUREDICE_DB_HOST=db.rpglibrary.org
+SECUREDICE_DB_PORT=3306
+SECUREDICE_DB_NAME=rpglibrary_org
+SECUREDICE_DB_USER=<MySQL user>
+SECUREDICE_DB_PASSWORD=<MySQL password>
 ```
 
-The configured directory must already exist and be writable by PHP. Secure Dice does not require a separate database server or user accounts.
+The configured MySQL account must be able to create the `sd2_` tables. No application user accounts are required.
 
 Result authentication and recipient consent require a persistent 256-bit application secret, supplied as exactly 64 hexadecimal characters. Generate it once and store it in the private configuration:
 
@@ -199,9 +203,9 @@ The worker logs operational details to the PHP error log without returning SMTP 
 
 ### DreamHost Shared Hosting
 
-The example configuration is prefilled with DreamHost's non-secret SMTP settings. Create a dedicated address such as `securedice@rpglibrary.org` in **Manage Email**, then enter that full address and its mailbox password in the private configuration. DreamHost SMTP uses `smtp.dreamhost.com`, port `587`, and `starttls`; the authenticated username and From address should be the mailbox address.
+The example configuration uses the existing fully hosted `webmaster@rpglibrary.org` mailbox for SMTP authentication and the forward-only `securedice@rpglibrary.org` as the visible From address. Its replies continue to forward to the configured destination. DreamHost SMTP uses `smtp.dreamhost.com`, port `587`, and `starttls`; test both sending and a reply.
 
-Upload a release ZIP or source checkout beneath the domain, but keep `.securedice.env` and the SQLite data directory directly under `/home/YOUR_DREAMHOST_USER/` rather than under `rpglibrary.org/`. The template's opening comment contains the corresponding copy, permission, directory, and secret-generation commands.
+Upload a release ZIP or source checkout beneath the domain, but keep `.securedice.env` directly under `/home/YOUR_DREAMHOST_USER/` rather than under `rpglibrary.org/`. The template's opening comment contains the corresponding copy, permission, directory, and secret-generation commands.
 
 Create the queue worker in DreamHost's **Cron Jobs** panel, select the website's Shell user, enable locking, and run it every minute. Replace the username and installation path in this command:
 
@@ -211,9 +215,13 @@ Create the queue worker in DreamHost's **Cron Jobs** panel, select the website's
 
 Omit `--quiet` while initially testing so the worker prints a short status line. In scheduled operation, `--quiet` suppresses routine success output while errors still reach standard error and the PHP error log.
 
-Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, a SHA-256 corruption check, and a server-secret HMAC. They are insert-only; a database trigger prevents an existing result from being changed. Database files and SQLite sidecar files are restricted to the PHP process owner when the host permits permission changes.
+Stored result records contain the canonical version-2 JSON, generation time, schema version, random public ID, a SHA-256 corruption check, and a server-secret HMAC. The application inserts results without a write-back path; an HMAC detects direct database changes when they are read.
 
-To run the storage, verification, consent, and email tests:
+The integration tests require a dedicated disposable MySQL database whose name begins
+with `securedice_test_`; they refuse to run against another database. Set
+`SECUREDICE_TEST_DB_NAME`, `SECUREDICE_TEST_DB_HOST`, `SECUREDICE_TEST_DB_USER`,
+and `SECUREDICE_TEST_DB_PASSWORD` before running the storage, verification,
+consent, and email tests. The GitHub Actions workflow creates its own database.
 
 ```shell
 php tests/storage-test.php

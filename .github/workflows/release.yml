@@ -13,6 +13,17 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: securedice_test_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptestpass"
+          --health-interval=10s --health-timeout=5s --health-retries=10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -51,11 +62,14 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: pdo_sqlite, sodium
+          extensions: pdo_mysql, sodium
           coverage: none
 
       - name: Validate PHP and result storage
         shell: bash
+        env:
+          SECUREDICE_TEST_DB_NAME: securedice_test_ci
+          SECUREDICE_TEST_DB_PASSWORD: testpass
         run: |
           find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           for test_file in tests/*-test.php; do

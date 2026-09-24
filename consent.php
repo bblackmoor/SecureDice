@@ -208,25 +208,21 @@ function consume_consent_rate_limit(
     $bucket = consent_fingerprint('rate-limit:' . $context, $identifier);
     $connection = result_storage_connection();
     $statement = $connection->prepare(
-        'INSERT INTO rate_limits (bucket_key, window_started_at, attempts)
+        'INSERT INTO sd2_rate_limits (bucket_key, window_started_at, attempts)
         VALUES (:bucket_key, :now, 1)
-        ON CONFLICT(bucket_key) DO UPDATE SET
-            window_started_at = CASE
-                WHEN rate_limits.window_started_at <= :window_boundary THEN :now
-                ELSE rate_limits.window_started_at
-            END,
-            attempts = CASE
-                WHEN rate_limits.window_started_at <= :window_boundary THEN 1
-                ELSE rate_limits.attempts + 1
-            END'
+        ON DUPLICATE KEY UPDATE
+            attempts = IF(window_started_at <= :window_boundary, 1, attempts + 1),
+            window_started_at = IF(window_started_at <= :window_boundary_again, :new_window, window_started_at)'
     );
     $statement->execute([
         ':bucket_key' => $bucket,
         ':now' => $now,
         ':window_boundary' => $now - $windowSeconds,
+        ':window_boundary_again' => $now - $windowSeconds,
+        ':new_window' => $now,
     ]);
 
-    $lookup = $connection->prepare('SELECT attempts FROM rate_limits WHERE bucket_key = :bucket_key');
+    $lookup = $connection->prepare('SELECT attempts FROM sd2_rate_limits WHERE bucket_key = :bucket_key');
     $lookup->execute([':bucket_key' => $bucket]);
 
     return (int) $lookup->fetchColumn() <= $maximum;
@@ -251,7 +247,7 @@ function queue_consent_message(
     string $now
 ): void {
     $message = $connection->prepare(
-        'INSERT INTO outbound_messages
+        'INSERT INTO sd2_outbound_messages
         (message_type, recipient_id, payload_ciphertext, status, available_at, created_at)
         VALUES (:message_type, :recipient_id, :payload, \'pending\', :available_at, :created_at)'
     );
@@ -265,7 +261,7 @@ function queue_consent_message(
 
     $messageId = (int) $connection->lastInsertId();
     $history = $connection->prepare(
-        "INSERT INTO email_delivery_history
+        "INSERT INTO sd2_email_delivery_history
         (message_id, recipient_id, message_type, status, queued_at)
         VALUES (:message_id, :recipient_id, :message_type, 'queued', :queued_at)"
     );
@@ -281,7 +277,7 @@ function insert_unsubscribe_token(PDO $connection, int $recipientId, string $now
 {
     $token = generate_long_consent_token();
     $statement = $connection->prepare(
-        'INSERT INTO recipient_unsubscribe_tokens
+        'INSERT INTO sd2_recipient_unsubscribe_tokens
         (recipient_id, token_hash, created_at)
         VALUES (:recipient_id, :token_hash, :created_at)'
     );
@@ -297,9 +293,9 @@ function insert_unsubscribe_token(PDO $connection, int $recipientId, string $now
 function mark_superseded_history(PDO $connection, int $recipientId, string $messageType): void
 {
     $history = $connection->prepare(
-        "UPDATE email_delivery_history SET status = 'cancelled', error_category = 'superseded'
+        "UPDATE sd2_email_delivery_history SET status = 'cancelled', error_category = 'superseded'
         WHERE message_id IN (
-            SELECT id FROM outbound_messages
+            SELECT id FROM sd2_outbound_messages
             WHERE recipient_id = :recipient_id AND message_type = :message_type
                 AND status = 'failed' AND last_error = 'superseded'
         ) AND status IN ('queued', 'retrying')"
@@ -318,7 +314,7 @@ function mark_superseded_history(PDO $connection, int $recipientId, string $mess
 function find_recipient_by_fingerprint(PDO $connection, string $fingerprint): ?array
 {
     $lookup = $connection->prepare(
-        'SELECT id, status FROM recipients WHERE email_fingerprint = :fingerprint'
+        'SELECT id, status FROM sd2_recipients WHERE email_fingerprint = :fingerprint'
     );
     $lookup->execute([':fingerprint' => $fingerprint]);
     $record = $lookup->fetch();
@@ -341,7 +337,7 @@ function prepare_recipient_for_consent(
     if (is_array($existing)) {
         $recipientId = (int) $existing['id'];
         $update = $connection->prepare(
-            "UPDATE recipients
+            "UPDATE sd2_recipients
             SET email_ciphertext = :ciphertext, status = 'pending', updated_at = :updated_at,
                 confirmed_at = NULL, revoked_at = NULL
             WHERE id = :id"
@@ -356,7 +352,7 @@ function prepare_recipient_for_consent(
     }
 
     $insert = $connection->prepare(
-        "INSERT INTO recipients
+        "INSERT INTO sd2_recipients
         (email_fingerprint, email_ciphertext, status, created_at, updated_at)
         VALUES (:fingerprint, :ciphertext, 'pending', :created_at, :updated_at)"
     );
@@ -377,7 +373,7 @@ function consume_open_consent_challenges(
     string $now
 ): void {
     $consume = $connection->prepare(
-        'UPDATE consent_challenges SET consumed_at = :consumed_at
+        'UPDATE sd2_consent_challenges SET consumed_at = :consumed_at
         WHERE recipient_id = :recipient_id AND purpose = :purpose AND consumed_at IS NULL'
     );
     $consume->execute([
@@ -393,7 +389,7 @@ function supersede_pending_recipient_messages(
     string $messageType
 ): void {
     $supersede = $connection->prepare(
-        "UPDATE outbound_messages
+        "UPDATE sd2_outbound_messages
         SET status = 'failed', last_error = 'superseded', payload_ciphertext = NULL
         WHERE recipient_id = :recipient_id AND message_type = :message_type
             AND status = 'pending'"
@@ -414,7 +410,7 @@ function insert_consent_challenge(
     string $purpose
 ): void {
     $challenge = $connection->prepare(
-        'INSERT INTO consent_challenges
+        'INSERT INTO sd2_consent_challenges
         (recipient_id, token_hash, expires_at, created_at, purpose)
         VALUES (:recipient_id, :token_hash, :expires_at, :created_at, :purpose)'
     );
@@ -494,8 +490,8 @@ function find_live_consent_challenge(
 ): array {
     $lookup = $connection->prepare(
         'SELECT c.id AS challenge_id, c.recipient_id, r.email_ciphertext
-        FROM consent_challenges c
-        JOIN recipients r ON r.id = c.recipient_id
+        FROM sd2_consent_challenges c
+        JOIN sd2_recipients r ON r.id = c.recipient_id
         WHERE c.token_hash = :token_hash
             AND c.purpose = :purpose
             AND c.consumed_at IS NULL
@@ -520,7 +516,7 @@ function find_live_consent_challenge(
 function consume_consent_challenge(PDO $connection, int $challengeId, string $now): void
 {
     $consume = $connection->prepare(
-        'UPDATE consent_challenges SET consumed_at = :now WHERE id = :id AND consumed_at IS NULL'
+        'UPDATE sd2_consent_challenges SET consumed_at = :now WHERE id = :id AND consumed_at IS NULL'
     );
     $consume->execute([':now' => $now, ':id' => $challengeId]);
 }
@@ -547,7 +543,7 @@ function insert_recipient_management_token(
     string $now
 ): void {
     $management = $connection->prepare(
-        "INSERT INTO recipient_management_tokens
+        "INSERT INTO sd2_recipient_management_tokens
         (recipient_id, token_hash, status, created_at)
         VALUES (:recipient_id, :token_hash, 'active', :created_at)"
     );
@@ -577,11 +573,11 @@ function queue_recipient_credentials(
 function activate_confirmed_recipient(PDO $connection, int $recipientId, string $now): void
 {
     $activate = $connection->prepare(
-        "UPDATE recipients
-        SET status = 'active', updated_at = :now, confirmed_at = :now, revoked_at = NULL
+        "UPDATE sd2_recipients
+        SET status = 'active', updated_at = :now, confirmed_at = :confirmed_at, revoked_at = NULL
         WHERE id = :id"
     );
-    $activate->execute([':now' => $now, ':id' => $recipientId]);
+    $activate->execute([':now' => $now, ':confirmed_at' => $now, ':id' => $recipientId]);
 }
 
 /** Consume a one-time confirmation and return capabilities that are shown once. */
@@ -613,7 +609,7 @@ function confirm_recipient_consent(string $submittedToken, string $sourceIp): ar
             $connection,
             $recipientId,
             $now,
-            ['recipient_capabilities', 'recipient_management_tokens']
+            ['sd2_recipient_capabilities', 'sd2_recipient_management_tokens']
         );
         insert_recipient_management_token($connection, $recipientId, $managementToken, $now);
         queue_recipient_credentials(
@@ -668,7 +664,7 @@ function recover_recipient_management(string $submittedToken, string $sourceIp):
             $connection,
             $recipientId,
             $now,
-            ['recipient_management_tokens']
+            ['sd2_recipient_management_tokens']
         );
         insert_recipient_management_token($connection, $recipientId, $managementToken, $now);
         queue_recipient_credentials(
@@ -701,8 +697,8 @@ function find_recipient_management(string $submittedToken): array
     $token = validate_long_consent_token($submittedToken);
     $statement = result_storage_connection()->prepare(
         "SELECT r.id, r.email_ciphertext, r.delivery_mode
-        FROM recipient_management_tokens m
-        JOIN recipients r ON r.id = m.recipient_id
+        FROM sd2_recipient_management_tokens m
+        JOIN sd2_recipients r ON r.id = m.recipient_id
         WHERE m.token_hash = :token_hash AND m.status = 'active' AND r.status = 'active'"
     );
     $statement->execute([':token_hash' => consent_token_hash($token)]);
@@ -734,7 +730,7 @@ function set_recipient_delivery_mode(string $managementToken, string $deliveryMo
 
     $management = find_recipient_management($managementToken);
     $statement = result_storage_connection()->prepare(
-        'UPDATE recipients SET delivery_mode = :delivery_mode, updated_at = :updated_at
+        'UPDATE sd2_recipients SET delivery_mode = :delivery_mode, updated_at = :updated_at
         WHERE id = :recipient_id AND status = \'active\''
     );
     $statement->execute([
@@ -747,12 +743,12 @@ function set_recipient_delivery_mode(string $managementToken, string $deliveryMo
 function revoke_recipient_records(PDO $connection, int $recipientId, string $now): void
 {
     $recipient = $connection->prepare(
-        "UPDATE recipients SET status = 'revoked', updated_at = :now, revoked_at = :now
+        "UPDATE sd2_recipients SET status = 'revoked', updated_at = :now, revoked_at = :revoked_at
         WHERE id = :recipient_id"
     );
-    $recipient->execute([':now' => $now, ':recipient_id' => $recipientId]);
+    $recipient->execute([':now' => $now, ':revoked_at' => $now, ':recipient_id' => $recipientId]);
 
-    foreach (['recipient_capabilities', 'recipient_management_tokens'] as $table) {
+    foreach (['sd2_recipient_capabilities', 'sd2_recipient_management_tokens'] as $table) {
         $revoke = $connection->prepare(
             "UPDATE {$table} SET status = 'revoked', revoked_at = :now
             WHERE recipient_id = :recipient_id AND status = 'active'"
@@ -761,20 +757,20 @@ function revoke_recipient_records(PDO $connection, int $recipientId, string $now
     }
 
     $consume = $connection->prepare(
-        'UPDATE consent_challenges SET consumed_at = :now
+        'UPDATE sd2_consent_challenges SET consumed_at = :now
         WHERE recipient_id = :recipient_id AND consumed_at IS NULL'
     );
     $consume->execute([':now' => $now, ':recipient_id' => $recipientId]);
 
     $cancelMessages = $connection->prepare(
-        "UPDATE outbound_messages SET status = 'failed', last_error = 'recipient revoked',
+        "UPDATE sd2_outbound_messages SET status = 'failed', last_error = 'recipient revoked',
             payload_ciphertext = NULL
         WHERE recipient_id = :recipient_id AND status = 'pending'"
     );
     $cancelMessages->execute([':recipient_id' => $recipientId]);
 
     $cancelHistory = $connection->prepare(
-        "UPDATE email_delivery_history SET status = 'cancelled', error_category = 'recipient_revoked'
+        "UPDATE sd2_email_delivery_history SET status = 'cancelled', error_category = 'recipient_revoked'
         WHERE recipient_id = :recipient_id AND status IN ('queued', 'retrying')"
     );
     $cancelHistory->execute([':recipient_id' => $recipientId]);
@@ -807,7 +803,7 @@ function revoke_recipient_consent(string $managementToken): void
 function issue_recipient_unsubscribe_token(int $recipientId): string
 {
     $connection = result_storage_connection();
-    $active = $connection->prepare("SELECT 1 FROM recipients WHERE id = :id AND status = 'active'");
+    $active = $connection->prepare("SELECT 1 FROM sd2_recipients WHERE id = :id AND status = 'active'");
     $active->execute([':id' => $recipientId]);
 
     if ($active->fetchColumn() === false) {
@@ -822,8 +818,8 @@ function find_recipient_unsubscribe(string $submittedToken): array
     $token = validate_long_consent_token($submittedToken);
     $statement = result_storage_connection()->prepare(
         "SELECT u.id AS unsubscribe_id, r.id AS recipient_id, r.email_ciphertext
-        FROM recipient_unsubscribe_tokens u
-        JOIN recipients r ON r.id = u.recipient_id
+        FROM sd2_recipient_unsubscribe_tokens u
+        JOIN sd2_recipients r ON r.id = u.recipient_id
         WHERE u.token_hash = :token_hash AND u.used_at IS NULL AND r.status = 'active'"
     );
     $statement->execute([':token_hash' => consent_token_hash($token)]);
@@ -856,7 +852,7 @@ function revoke_recipient_with_unsubscribe_token(string $submittedToken): void
 
     try {
         $used = $connection->prepare(
-            'UPDATE recipient_unsubscribe_tokens SET used_at = :now
+            'UPDATE sd2_recipient_unsubscribe_tokens SET used_at = :now
             WHERE id = :id AND used_at IS NULL'
         );
         $used->execute([':now' => $now, ':id' => $unsubscribe['unsubscribe_id']]);

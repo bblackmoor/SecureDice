@@ -7,23 +7,16 @@ This guide describes a production installation on DreamHost Shared Hosting. The 
 You need:
 
 - A DreamHost Shell user assigned to `rpglibrary.org`.
-- PHP 8.1 or newer with PDO SQLite and Sodium.
-- A dedicated DreamHost mailbox, such as `securedice@rpglibrary.org`.
+- PHP 8.1 or newer with PDO MySQL and Sodium.
+- A fully hosted DreamHost mailbox for SMTP authentication, such as `webmaster@rpglibrary.org`.
 - The current `SecureDice-<version>.zip` from GitHub Releases.
 - SSH or DreamHost File Manager access.
 
 Release ZIPs include PHPMailer and its production autoloader. A deployment from a Git source checkout must run `composer install --no-dev --optimize-autoloader` before use.
 
-## 1. Create private storage
+## 1. Prepare MySQL
 
-Log in with the site's DreamHost Shell user. Substitute the actual DreamHost username in every example:
-
-```shell
-mkdir -p /home/YOUR_DREAMHOST_USER/securedice-data
-chmod 700 /home/YOUR_DREAMHOST_USER/securedice-data
-```
-
-The SQLite database and its sidecar files will be created there. They must not be placed under `rpglibrary.org/` or another public website directory.
+Use the existing `rpglibrary_org` database on `db.rpglibrary.org`. Secure Dice 2 creates only tables whose names begin with `sd2_`. The MySQL account needs CREATE, ALTER, DROP, SELECT, INSERT, UPDATE, and DELETE privileges to create tables, copy rolls, and rename the legacy tables. Back up the existing database before running the one-time migration. DreamHost Shared MySQL does not allow application-created triggers; Secure Dice detects direct changes to stored results with their HMAC on read.
 
 ## 2. Install the release
 
@@ -53,14 +46,18 @@ Generate the application secret once:
 Edit `/home/YOUR_DREAMHOST_USER/.securedice.env` and replace every placeholder. A DreamHost configuration should resemble:
 
 ```text
-SECUREDICE_DB_PATH="/home/YOUR_DREAMHOST_USER/securedice-data/securedice.sqlite"
+SECUREDICE_DB_HOST="db.rpglibrary.org"
+SECUREDICE_DB_PORT="3306"
+SECUREDICE_DB_NAME="rpglibrary_org"
+SECUREDICE_DB_USER="REPLACE_WITH_MYSQL_USER"
+SECUREDICE_DB_PASSWORD="REPLACE_WITH_MYSQL_PASSWORD"
 SECUREDICE_SECRET="REPLACE_WITH_THE_GENERATED_64_HEXADECIMAL_CHARACTERS"
 SECUREDICE_BASE_URL="https://www.rpglibrary.org/software/securedice"
 
 SECUREDICE_SMTP_HOST="smtp.dreamhost.com"
 SECUREDICE_SMTP_PORT="587"
 SECUREDICE_SMTP_ENCRYPTION="starttls"
-SECUREDICE_SMTP_USERNAME="securedice@rpglibrary.org"
+SECUREDICE_SMTP_USERNAME="webmaster@rpglibrary.org"
 SECUREDICE_SMTP_PASSWORD="REPLACE_WITH_THE_MAILBOX_PASSWORD"
 SECUREDICE_SMTP_FROM_ADDRESS="securedice@rpglibrary.org"
 SECUREDICE_SMTP_FROM_NAME="Secure Dice"
@@ -73,13 +70,27 @@ Secure Dice reads `$HOME/.securedice.env` automatically in both web and command-
 
 ## 4. Configure DreamHost email
 
-Create `securedice@rpglibrary.org` under **Manage Email**. The SMTP username is the complete address; the SMTP From address should use that same mailbox.
+Use a fully hosted mailbox such as `webmaster@rpglibrary.org` for SMTP authentication. The From address may be the separate `securedice@rpglibrary.org` forward-only address so replies reach its configured destination. Verify both sending and a reply before launch.
 
 DreamHost recommends authenticated SMTP through `smtp.dreamhost.com` on port 587 with STARTTLS. Secure Dice does not use PHP `mail()`.
 
 If the domain's DNS is hosted somewhere other than DreamHost, including Cloudflare, reproduce DreamHost's required mail DNS records at that DNS provider. Confirm SPF and DKIM before testing delivery. Add a DMARC policy appropriate for the domain after legitimate mail passes SPF and DKIM alignment.
 
-## 5. Initialize and test the application
+## 5. Import legacy rolls once
+
+Stop Secure Dice 1 writes before importing. Its `secure_dice` table is MyISAM and approximately 1.4 GiB, so allow adequate database free space and time for the copy and complete row-by-row comparison. Back up the **whole** `rpglibrary_org` database first, including the old tables. Keep the newly configured `SECUREDICE_SECRET` safe with future backups.
+
+Run the CLI migration from the deployed application directory, using the same Shell user and private configuration as the website:
+
+```shell
+/usr/local/php84/bin/php bin/migrate-legacy-mysql.php --execute
+```
+
+The script imports only `secure_dice` rolls into `sd2_legacy_rolls`, preserving `id`, `dice_rolled`, `hash`, and `results` exactly. Legacy hashes remain legacy data; they do not become authenticated Secure Dice 2 records. Old sender and recipient addresses are **not** imported. It compares each copied row and checks row counts and the highest ID before renaming the original `secure_dice` and `rpglibrary_securedice_*` tables with `sd1_` prefixes. It records completion in `sd2_schema_meta` and skips copying on subsequent runs. If interrupted before verification, it checks existing copies and resumes. If verification fails, do not launch the new site; inspect the reported mismatch while keeping the old data untouched.
+
+A deployment cannot be considered migrated until this command reports the verified row count. The old tables remain in MySQL under their `sd1_` names for later inspection. Do not run Secure Dice 1 after the rename.
+
+## 6. Initialize and test the application
 
 Open:
 
@@ -105,7 +116,7 @@ Perform these checks in order:
 
 Do not use production recipient addresses until this sequence succeeds.
 
-## 6. Schedule the queue worker
+## 7. Schedule the queue worker
 
 In DreamHost's **Cron Jobs** panel, choose the same Shell user that owns the site, enable locking, select a one-minute custom schedule, and run:
 
@@ -117,32 +128,15 @@ In DreamHost's **Cron Jobs** panel, choose the same Shell user that owns the sit
 
 The worker uses database leases, so an abandoned run is recovered. DreamHost locking adds another layer of protection against overlapping scheduled executions.
 
-## 7. Logs and delivery history
+## 8. Logs and delivery history
 
 Operational failures are written to the PHP error log with generic categories rather than addresses, passwords, SMTP response text, or private tokens. DreamHost's panel and Shell-user logs should be checked after the first scheduled runs.
 
-Sanitized queue state and delivery history are retained in SQLite. Encrypted queue payloads are purged after successful delivery, permanent failure, supersession, or recipient revocation.
+Sanitized queue state and delivery history are retained in MySQL. Encrypted queue payloads are purged after successful delivery, permanent failure, supersession, or recipient revocation.
 
 ## Backups
 
-Back up these two items together:
-
-```text
-/home/YOUR_DREAMHOST_USER/.securedice.env
-/home/YOUR_DREAMHOST_USER/securedice-data/securedice.sqlite
-```
-
-Use SQLite's online backup command instead of copying an active WAL database directly:
-
-```shell
-mkdir -p /home/YOUR_DREAMHOST_USER/securedice-backups
-chmod 700 /home/YOUR_DREAMHOST_USER/securedice-backups
-sqlite3 /home/YOUR_DREAMHOST_USER/securedice-data/securedice.sqlite ".backup '/home/YOUR_DREAMHOST_USER/securedice-backups/securedice-YYYY-MM-DD.sqlite'"
-cp -p /home/YOUR_DREAMHOST_USER/.securedice.env /home/YOUR_DREAMHOST_USER/securedice-backups/securedice-YYYY-MM-DD.env
-chmod 600 /home/YOUR_DREAMHOST_USER/securedice-backups/*
-```
-
-Replace `YYYY-MM-DD` with the backup date. Store an additional encrypted copy somewhere outside DreamHost. A backup is not proven until both files have been restored in a non-production location and the application can verify an old result and read an existing recipient record.
+Back up the private `.securedice.env` and the full MySQL database together. Use DreamHost's MySQL backup facility or `mysqldump` with the existing database credentials; keep the dump outside the public website and store an encrypted off-host copy. For the first migration, verify that the backup contains the approximately 426,375-row `secure_dice` table and all `rpglibrary_securedice_*` tables before running the importer. A backup is proven only when a test restore can read an old result and verify a Secure Dice 2 result with the matching secret.
 
 ## Upgrading
 
@@ -150,18 +144,18 @@ Replace `YYYY-MM-DD` with the backup date. Store an additional encrypted copy so
 2. Read its release notes.
 3. Make and verify a database/configuration backup.
 4. Extract the release into a new sibling directory, not over the running installation.
-5. Confirm `.securedice.env` and the database remain outside both application directories.
+5. Confirm `.securedice.env` remains outside both application directories.
 6. Rename the old directory to `securedice-previous` and the new directory to `securedice`.
 7. Open a stored verification link, roll once, and run the worker manually.
 8. Retain the previous application directory and pre-upgrade database backup until normal operation is confirmed.
 
-Database migrations run automatically when the new application first opens storage. They are transactional, but an older application may not understand a newer schema.
+The `sd2_` schema initializes when the application first opens storage. Legacy import is an explicit, one-time CLI operation. MySQL DDL is not transactional, so always keep a tested backup before changing the schema.
 
 ## Rollback
 
-If the new release fails before a database migration, restore the previous application directory.
+If the new release fails before a schema change, restore the previous application directory.
 
-If the schema was upgraded, restore both the previous application directory and its matching pre-upgrade SQLite backup. Do not run old code against a database reporting a newer schema version. Preserve the failed database separately for diagnosis rather than overwriting the only copy.
+If the schema changed, restore the previous application directory and its matching MySQL backup together. Secure Dice 1 cannot run after its old tables have been renamed unless those names are restored. Preserve the failed database separately for diagnosis.
 
 The private configuration normally remains compatible across upgrades. Restore its matching backup if configuration keys or the application secret were changed.
 
@@ -170,7 +164,7 @@ The private configuration normally remains compatible across upgrades. Restore i
 If `SECUREDICE_SECRET` is lost or changed accidentally:
 
 1. Stop the queue cron job.
-2. Restore `.securedice.env` and the SQLite database from the same known-good backup set.
+2. Restore `.securedice.env` and the MySQL database from the same known-good backup set.
 3. Run the worker manually and test one existing private settings link.
 
 Existing encrypted recipient addresses cannot be recovered without the original secret, and stored dice results cannot pass their server-authentication check. Do not silently generate a replacement for an existing database. The same secret authenticates results and protects consent records and keyed rate-limit identifiers.
@@ -179,7 +173,8 @@ Existing encrypted recipient addresses cannot be recovered without the original 
 
 - [ ] Application and verification URLs use HTTPS.
 - [ ] `.securedice.env` is outside the web directory and mode `600`.
-- [ ] SQLite data directory is outside the web directory and mode `700`.
+- [ ] MySQL settings point to `db.rpglibrary.org`, `rpglibrary_org`, and an account with the required `sd2_` schema privileges.
+- [ ] Legacy migration reports a fully verified row count and the `sd1_` tables remain available.
 - [ ] `SECUREDICE_SECRET` and the database are backed up together.
 - [ ] DreamHost SMTP authentication succeeds over STARTTLS.
 - [ ] SPF and DKIM pass; DMARC alignment is checked.

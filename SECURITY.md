@@ -6,7 +6,7 @@ Secure Dice is designed for anonymous public rolling with recipient-controlled e
 
 - Result IDs and private consent links are 256-bit or 128-bit random capabilities that cannot feasibly be enumerated.
 - Canonical result JSON is authenticated with a server-secret HMAC before it is accepted as genuine. The public SHA-256 value remains an additional corruption check.
-- Result rows are insert-only, and a database trigger rejects application-level updates.
+- The application inserts result rows without a write-back path. Stored HMACs expose direct database tampering when a result is read. DreamHost Shared MySQL cannot create an immutability trigger.
 - Email addresses and queued payloads are encrypted at rest. Address lookup, source identifiers, and rate-limit buckets use keyed fingerprints rather than plaintext.
 - Confirmation and recovery links are single-use, expire after 24 hours, and require an explicit CSRF-protected POST before they change state. Email scanners can safely open the initial GET.
 - Management and unsubscribe changes require both an unguessable capability and a same-site CSRF token.
@@ -30,7 +30,7 @@ Rate limiting uses the web server's `REMOTE_ADDR`. A reverse proxy must be confi
 The application assumes:
 
 - HTTPS terminates at a trusted web server or reverse proxy.
-- `SECUREDICE_SECRET`, the SMTP password, the SQLite database, backups, and the hosting account remain private.
+- `SECUREDICE_SECRET`, the SMTP password, the MySQL database, backups, and the hosting account remain private.
 - The host's PHP runtime, operating system, mail account, and random-number generator are trustworthy.
 
 The HMAC authenticates a record to this Secure Dice installation. It is not a public-key signature and does not prove a result independently of the server. An attacker who controls both the database and `SECUREDICE_SECRET`, or who can execute code as the application, can forge records.

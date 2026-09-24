@@ -2,12 +2,9 @@
 
 declare(strict_types=1);
 
-$databasePath = sys_get_temp_dir()
-    . '/securedice-consent-test-'
-    . bin2hex(random_bytes(8))
-    . '.sqlite';
+require_once __DIR__ . '/mysql-test-bootstrap.php';
+securedice_test_reset();
 
-putenv('SECUREDICE_DB_PATH=' . $databasePath);
 putenv('SECUREDICE_SECRET=' . str_repeat('42', 32));
 
 require_once dirname(__DIR__) . '/consent.php';
@@ -37,12 +34,12 @@ try {
 
     $connection = result_storage_connection();
     consent_test_assert(
-        (int) $connection->query('PRAGMA user_version')->fetchColumn() === 5,
+        (string) $connection->query("SELECT meta_value FROM sd2_schema_meta WHERE meta_key = 'schema_version'")->fetchColumn() === '1',
         'The consent schema was not initialized.'
     );
 
     $recipient = $connection->query(
-        'SELECT id, email_ciphertext, status FROM recipients LIMIT 1'
+        'SELECT id, email_ciphertext, status FROM sd2_recipients LIMIT 1'
     )->fetch();
     consent_test_assert(is_array($recipient), 'The pending recipient was not stored.');
     consent_test_assert($recipient['status'] === 'pending', 'The recipient was activated before confirmation.');
@@ -52,7 +49,7 @@ try {
     );
 
     $queued = $connection->query(
-        "SELECT payload_ciphertext FROM outbound_messages WHERE status = 'pending' LIMIT 1"
+        "SELECT payload_ciphertext FROM sd2_outbound_messages WHERE status = 'pending' LIMIT 1"
     )->fetch();
     consent_test_assert(is_array($queued), 'The confirmation message was not queued.');
     consent_test_assert(
@@ -80,7 +77,7 @@ try {
     );
 
     $connection->exec(
-        "UPDATE consent_challenges SET expires_at = '2000-01-01T00:00:00Z'
+        "UPDATE sd2_consent_challenges SET expires_at = '2000-01-01T00:00:00Z'
         WHERE purpose = 'enroll' AND consumed_at IS NULL"
     );
     consent_test_expect_exception(
@@ -89,7 +86,7 @@ try {
         'An expired confirmation token was accepted.'
     );
     $connection->exec(
-        "UPDATE consent_challenges SET expires_at = '2999-01-01T00:00:00Z'
+        "UPDATE sd2_consent_challenges SET expires_at = '2999-01-01T00:00:00Z'
         WHERE purpose = 'enroll' AND consumed_at IS NULL"
     );
 
@@ -104,20 +101,23 @@ try {
     );
     consent_test_assert(
         (int) $connection->query(
-            "SELECT COUNT(*) FROM outbound_messages WHERE message_type = 'consent_credentials'"
+            "SELECT COUNT(*) FROM sd2_outbound_messages WHERE message_type = 'consent_credentials'"
         )->fetchColumn() === 1,
         'Confirmation did not queue a durable credentials message.'
     );
 
-    $connection->exec('PRAGMA wal_checkpoint(FULL)');
-    $rawDatabase = file_get_contents($databasePath);
-    consent_test_assert(is_string($rawDatabase), 'The test database could not be inspected.');
+    $storedTokens = implode(' ', $connection->query(
+        'SELECT token_hash FROM sd2_consent_challenges'
+    )->fetchAll(PDO::FETCH_COLUMN));
+    $storedPayloads = implode(' ', $connection->query(
+        'SELECT payload_ciphertext FROM sd2_outbound_messages'
+    )->fetchAll(PDO::FETCH_COLUMN));
     consent_test_assert(
-        strpos($rawDatabase, $confirmationToken) === false,
+        !str_contains($storedTokens . $storedPayloads, $confirmationToken),
         'A raw confirmation token was retained in the database.'
     );
     consent_test_assert(
-        strpos($rawDatabase, $confirmed['management_token']) === false,
+        !str_contains($storedTokens . $storedPayloads, $confirmed['management_token']),
         'A raw management token was retained in the database.'
     );
 
@@ -148,7 +148,7 @@ try {
     consent_test_assert($duplicate['queued'] === true, 'An active address did not queue management recovery.');
 
     $recoveryMessage = $connection->query(
-        "SELECT payload_ciphertext FROM outbound_messages
+        "SELECT payload_ciphertext FROM sd2_outbound_messages
         WHERE message_type = 'management_recovery' AND status = 'pending'
         ORDER BY id DESC LIMIT 1"
     )->fetch();
@@ -183,7 +183,7 @@ try {
     );
 
     $credentialsMessage = $connection->query(
-        "SELECT payload_ciphertext FROM outbound_messages
+        "SELECT payload_ciphertext FROM sd2_outbound_messages
         WHERE message_type = 'consent_credentials' AND status = 'pending'
         ORDER BY id DESC LIMIT 1"
     )->fetch();
@@ -198,7 +198,7 @@ try {
 
     revoke_recipient_with_unsubscribe_token($unsubscribeToken);
     consent_test_assert(
-        (int) $connection->query("SELECT COUNT(*) FROM outbound_messages WHERE status = 'pending'")->fetchColumn() === 0,
+        (int) $connection->query("SELECT COUNT(*) FROM sd2_outbound_messages WHERE status = 'pending'")->fetchColumn() === 0,
         'Pending messages survived recipient revocation.'
     );
     consent_test_expect_exception(
@@ -215,7 +215,7 @@ try {
     $optedInAgain = request_recipient_consent('player.example@example.com', '192.0.2.11');
     consent_test_assert($optedInAgain['queued'] === true, 'A revoked recipient could not opt in again.');
     $newConfirmation = $connection->query(
-        "SELECT payload_ciphertext FROM outbound_messages
+        "SELECT payload_ciphertext FROM sd2_outbound_messages
         WHERE message_type = 'consent_confirmation' AND status = 'pending'
         ORDER BY id DESC LIMIT 1"
     )->fetch();
@@ -226,7 +226,7 @@ try {
     );
     revoke_recipient_consent($confirmedAgain['management_token']);
     consent_test_assert(
-        $connection->query("SELECT status FROM recipients LIMIT 1")->fetchColumn() === 'revoked',
+        $connection->query("SELECT status FROM sd2_recipients LIMIT 1")->fetchColumn() === 'revoked',
         'Management-link revocation did not revoke the recipient.'
     );
 
@@ -247,7 +247,7 @@ try {
         'The rate-limit window did not reset.'
     );
     $rateBucket = (string) $connection->query(
-        "SELECT bucket_key FROM rate_limits
+        "SELECT bucket_key FROM sd2_rate_limits
         WHERE attempts = 1 ORDER BY window_started_at DESC LIMIT 1"
     )->fetchColumn();
     consent_test_assert(
@@ -277,9 +277,5 @@ try {
 
     echo "Consent tests passed.\n";
 } finally {
-    foreach ([$databasePath, $databasePath . '-shm', $databasePath . '-wal'] as $path) {
-        if (file_exists($path)) {
-            @unlink($path);
-        }
-    }
+    // The dedicated test database is reset before the next test.
 }

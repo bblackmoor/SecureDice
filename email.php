@@ -124,7 +124,7 @@ function insert_result_delivery_message(
 ): void {
     $availableAt = consent_timestamp(strtotime($now) + 15);
     $statement = $connection->prepare(
-        "INSERT INTO outbound_messages
+        "INSERT INTO sd2_outbound_messages
         (message_type, recipient_id, request_id, result_id, payload_ciphertext,
             status, available_at, created_at)
         VALUES ('result_delivery', :recipient_id, :request_id, :result_id, :payload,
@@ -143,7 +143,7 @@ function insert_result_delivery_message(
     ]);
     $messageId = (int) $connection->lastInsertId();
     $history = $connection->prepare(
-        "INSERT INTO email_delivery_history
+        "INSERT INTO sd2_email_delivery_history
         (message_id, request_id, recipient_id, result_id, message_type, status, queued_at)
         VALUES (:message_id, :request_id, :recipient_id, :result_id,
             'result_delivery', 'queued', :queued_at)"
@@ -163,7 +163,7 @@ function find_active_email_recipients(PDO $connection, array $recipients): array
     $activeCount = 0;
     $lookup = $connection->prepare(
         "SELECT id, email_ciphertext, delivery_mode
-        FROM recipients WHERE email_fingerprint = :fingerprint AND status = 'active'"
+        FROM sd2_recipients WHERE email_fingerprint = :fingerprint AND status = 'active'"
     );
 
     foreach ($recipients as $email) {
@@ -225,12 +225,12 @@ function build_result_delivery_queue(
 ): array {
     $queue = [];
     $claim = $connection->prepare(
-        'INSERT OR IGNORE INTO result_delivery_claims
+        'INSERT IGNORE INTO sd2_result_delivery_claims
         (recipient_id, result_id, created_at)
         VALUES (:recipient_id, :result_id, :created_at)'
     );
     $releaseClaim = $connection->prepare(
-        'DELETE FROM result_delivery_claims
+        'DELETE FROM sd2_result_delivery_claims
         WHERE recipient_id = :recipient_id AND result_id = :result_id'
     );
 
@@ -263,7 +263,7 @@ function insert_email_request(
     string $now
 ): int {
     $request = $connection->prepare(
-        'INSERT INTO email_requests
+        'INSERT INTO sd2_email_requests
         (public_id, result_id, source_bucket, intended_count, opted_in_count,
             not_opted_in_count, not_queued_count, created_at)
         VALUES (:public_id, :result_id, :source_bucket, :intended_count, :opted_in_count,
@@ -353,7 +353,7 @@ function request_result_email(string $resultId, string $submittedRecipients, str
 function recover_stale_email_claims(PDO $connection, string $now, string $stale): void
 {
     $recover = $connection->prepare(
-        "UPDATE outbound_messages
+        "UPDATE sd2_outbound_messages
         SET status = 'pending', lease_token = NULL, claimed_at = NULL,
             available_at = :now, last_error = 'worker_abandoned'
         WHERE status = 'sending' AND claimed_at < :stale"
@@ -364,7 +364,7 @@ function recover_stale_email_claims(PDO $connection, string $now, string $stale)
 function find_email_batch(PDO $connection, string $now): array
 {
     $first = $connection->prepare(
-        "SELECT * FROM outbound_messages
+        "SELECT * FROM sd2_outbound_messages
         WHERE status = 'pending' AND available_at <= :now
         ORDER BY available_at, id LIMIT 1"
     );
@@ -382,16 +382,17 @@ function find_email_batch(PDO $connection, string $now): array
     }
 
     $batch = $connection->prepare(
-        "SELECT * FROM outbound_messages
+        "SELECT * FROM sd2_outbound_messages
         WHERE id <> :id AND recipient_id = :recipient_id
             AND message_type = 'result_delivery' AND status = 'pending'
-            AND (available_at <= :now OR (attempts = 0 AND created_at <= :now))
+            AND (available_at <= :now OR (attempts = 0 AND created_at <= :created_before))
         ORDER BY created_at, id LIMIT 19"
     );
     $batch->execute([
         ':id' => (int) $message['id'],
         ':recipient_id' => (int) $message['recipient_id'],
         ':now' => $now,
+        ':created_before' => $now,
     ]);
 
     return array_merge($messages, $batch->fetchAll());
@@ -406,7 +407,7 @@ function mark_email_batch_claimed(
     $ids = array_map(static fn (array $item): int => (int) $item['id'], $messages);
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $claim = $connection->prepare(
-        "UPDATE outbound_messages SET status = 'sending', claimed_at = ?, lease_token = ?,
+        "UPDATE sd2_outbound_messages SET status = 'sending', claimed_at = ?, lease_token = ?,
             attempts = attempts + 1 WHERE status = 'pending' AND id IN ({$placeholders})"
     );
     $claim->execute(array_merge([$now, $leaseToken], $ids));
@@ -416,7 +417,7 @@ function mark_email_batch_claimed(
     }
 
     $history = $connection->prepare(
-        "UPDATE email_delivery_history SET status = 'retrying',
+        "UPDATE sd2_email_delivery_history SET status = 'retrying',
             attempt_count = attempt_count + 1, last_attempt_at = :now
         WHERE message_id = :message_id"
     );
@@ -491,7 +492,7 @@ function finish_email_batch(array $messages, bool $sent, string $category, ?stri
                 ? (string) $message['available_at']
                 : consent_timestamp($nowUnix + email_retry_delay($attempts));
             $update = $connection->prepare(
-                'UPDATE outbound_messages
+                'UPDATE sd2_outbound_messages
                 SET status = :status, available_at = :available_at, claimed_at = NULL,
                     lease_token = NULL, sent_at = :sent_at, last_error = :last_error,
                     payload_ciphertext = :payload
@@ -508,7 +509,7 @@ function finish_email_batch(array $messages, bool $sent, string $category, ?stri
             ]);
             $historyStatus = $sent ? 'sent' : ($permanent ? 'failed' : 'retrying');
             $history = $connection->prepare(
-                'UPDATE email_delivery_history
+                'UPDATE sd2_email_delivery_history
                 SET status = :status, delivered_at = :delivered_at,
                     error_category = :error_category, provider_message_id = :provider_message_id
                 WHERE message_id = :message_id'
@@ -544,7 +545,7 @@ function cancel_email_batch(array $messages, string $category): void
     try {
         foreach ($messages as $message) {
             $update = $connection->prepare(
-                "UPDATE outbound_messages
+                "UPDATE sd2_outbound_messages
                 SET status = 'failed', claimed_at = NULL, lease_token = NULL,
                     payload_ciphertext = NULL, last_error = :category
                 WHERE id = :id AND lease_token = :lease_token"
@@ -555,7 +556,7 @@ function cancel_email_batch(array $messages, string $category): void
                 ':lease_token' => (string) $message['lease_token'],
             ]);
             $history = $connection->prepare(
-                "UPDATE email_delivery_history
+                "UPDATE sd2_email_delivery_history
                 SET status = 'cancelled', error_category = :category
                 WHERE message_id = :message_id"
             );
@@ -642,7 +643,7 @@ function load_email_request_counts(int $requestId): ?array
 {
     $request = result_storage_connection()->prepare(
         'SELECT intended_count, opted_in_count, not_opted_in_count, not_queued_count
-        FROM email_requests WHERE id = :id'
+        FROM sd2_email_requests WHERE id = :id'
     );
     $request->execute([':id' => $requestId]);
     $counts = $request->fetch();
@@ -708,7 +709,7 @@ function build_email_message(array $messages): array
 function email_recipient_is_available(array $message): bool
 {
     $recipient = result_storage_connection()->prepare(
-        'SELECT status, delivery_mode FROM recipients WHERE id = :id'
+        'SELECT status, delivery_mode FROM sd2_recipients WHERE id = :id'
     );
     $recipient->execute([':id' => (int) $message['recipient_id']]);
     $state = $recipient->fetch();

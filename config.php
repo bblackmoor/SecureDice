@@ -37,7 +37,11 @@ function securedice_secret_bytes(): string
 function securedice_configuration_keys(): array
 {
     return [
-        'SECUREDICE_DB_PATH',
+        'SECUREDICE_DB_HOST',
+        'SECUREDICE_DB_PORT',
+        'SECUREDICE_DB_NAME',
+        'SECUREDICE_DB_USER',
+        'SECUREDICE_DB_PASSWORD',
         'SECUREDICE_SECRET',
         'SECUREDICE_BASE_URL',
         'SECUREDICE_SMTP_HOST',
