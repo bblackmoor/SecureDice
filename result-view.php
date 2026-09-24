@@ -178,28 +178,6 @@ $showLimit = 200;
     </p>
 </section>
 
-<section class="card email-result-card" aria-labelledby="email-result-title">
-    <h2 id="email-result-title">Email this result</h2>
-    <p>Enter up to 10 recipient email addresses, separated by spaces, commas, or new lines. Delivery is attempted only for addresses that have confirmed their opt-in.</p>
-    <form class="email-result-form" method="post" action="email-result.php">
-        <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
-        <input type="hidden" name="result_id" value="<?= h($resultId) ?>">
-        <label for="result-recipients">Recipient email addresses</label>
-        <textarea
-            id="result-recipients"
-            name="recipients"
-            rows="4"
-            maxlength="3000"
-            autocomplete="off"
-            spellcheck="false"
-            required
-            aria-describedby="result-recipients-help"
-        ></textarea>
-        <p id="result-recipients-help" class="field-help">The request response does not identify which addresses are opted in. Delivered messages contain counts, never recipient names or addresses.</p>
-        <button class="sd2-action-btn primary inline-action" type="submit">Send Result</button>
-    </form>
-</section>
-
 <div class="card">
     <div class="results-info">
         <?= h((string) $repeat) ?> ×

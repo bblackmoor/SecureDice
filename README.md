@@ -65,7 +65,7 @@ The results page also provides:
 - Canonical JSON containing the specification, generated time, individual dice, and totals.
 - A permanent verification link and random result ID.
 - Buttons for opening the verified record and copying its link or canonical JSON.
-- A form for emailing the result to as many as 10 independently opted-in addresses.
+- Recipients chosen before the roll, with queued email to as many as 10 independently opted-in addresses.
 
 ## Result Verification
 
@@ -82,7 +82,7 @@ An address must confirm its opt-in once before Secure Dice will send results to 
 1. The recipient follows **Opt in to result email or manage consent** and submits an address on `recipient.php`.
 2. Secure Dice stores the address encrypted and emails a single-use confirmation link that expires after 24 hours. Opening it presents a confirmation button; only that CSRF-protected action activates delivery.
 3. Confirmation activates the address and provides a private settings link. No code needs to be shared with a roller.
-4. A roller enters up to 10 addresses on a stored result page. Secure Dice silently queues only active, available recipients and gives the roller a generic response.
+4. A roller enters up to 10 addresses before rolling. Secure Dice silently queues the resulting roll only for active, available recipients. Results cannot be selected for email after they are seen.
 5. Result email includes readable roll arithmetic, the authoritative verification link, aggregate recipient counts, and a per-message unsubscribe link.
 6. The private settings link can select **Tabletop session**, **Occasional**, or **Paused** delivery, or revoke consent immediately. Submitting an active address on the opt-in form emails a one-time recovery link for replacing the private settings link.
 

@@ -29,8 +29,14 @@ $pages = [
     'recover-recipient.php',
     'manage-recipient.php',
     'unsubscribe.php',
-    'email-result.php',
 ];
+
+ui_test_assert(
+    str_contains(ui_test_file('email-result.php'), 'http_response_code(410)')
+        && !str_contains(ui_test_file('result-view.php'), 'action="email-result.php"')
+        && str_contains(ui_test_file('securedice.php'), 'name="recipients"'),
+    'Results can still be selected for email after the dice are rolled.'
+);
 
 foreach ($pages as $page) {
     $contents = ui_test_file($page);

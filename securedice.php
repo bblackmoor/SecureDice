@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
+require_once __DIR__ . '/consent.php';
 
 send_security_headers();
 
@@ -211,11 +212,18 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
 
 <main id="main-content" tabindex="-1">
 <form id="sd2-form" method="post" action="roll.php">
+    <input type="hidden" name="csrf_token" value="<?= h(consent_csrf_token()) ?>">
 
     <div class="floating-actions" role="group" aria-label="Roll actions">
         <button type="submit" class="sd2-action-btn primary">Roll Dice</button>
         <button id="sd2-copy-url" type="button" class="sd2-action-btn neutral">Copy URL</button>
         <button id="sd2-reset" type="button" class="sd2-action-btn danger">Reset</button>
+    </div>
+
+    <div class="card">
+        <label for="roll-recipients">Email recipients (optional, up to 10)</label>
+        <textarea id="roll-recipients" name="recipients" rows="3" maxlength="3000" autocomplete="off" spellcheck="false" aria-describedby="roll-recipients-help"></textarea>
+        <p id="roll-recipients-help" class="field-help">Choose recipients before rolling. Results are emailed only to addresses that have confirmed opt-in. You cannot email a result after seeing it.</p>
     </div>
 
     <div class="card">

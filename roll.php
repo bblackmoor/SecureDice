@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/storage.php';
+require_once __DIR__ . '/email.php';
 
 send_security_headers();
 
@@ -362,6 +363,15 @@ function build_roll_result_record(
 }
 
 try {
+    $submittedRecipients = $useGetPresets ? '' : trim((string) ($_POST['recipients'] ?? ''));
+    if (!$useGetPresets) {
+        app_start_session();
+        validate_consent_csrf((string) ($_POST['csrf_token'] ?? ''));
+    }
+    if ($submittedRecipients !== '') {
+        parse_email_recipients($submittedRecipients);
+        enforce_consent_rate_limit('result-email-ip-hour', consent_source_ip(), 300, 3600);
+    }
     $request = read_roll_request(
         $useGetPresets,
         $allowedDieTypes,
@@ -391,7 +401,11 @@ try {
     );
 
     app_start_session();
-    $_SESSION['last_roll'] = store_result_record($result);
+    $storedResult = store_result_record($result);
+    if ($submittedRecipients !== '') {
+        request_result_email((string) $storedResult['result_id'], $submittedRecipients, consent_source_ip());
+    }
+    $_SESSION['last_roll'] = $storedResult;
 
     header('Location: results.php');
     exit;
