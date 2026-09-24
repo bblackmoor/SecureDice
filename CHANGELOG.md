@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.58
+
+- Added a manual Actions run for verifying the MySQL integration tests when commits are published through an API connection.
+
 ## 2.0.57
 
 - Moved Secure Dice 2 results, consent, and email queues to `sd2_` tables in the existing MySQL database.
