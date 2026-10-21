@@ -714,8 +714,16 @@ function email_recipient_is_available(array $message): bool
     $recipient->execute([':id' => (int) $message['recipient_id']]);
     $state = $recipient->fetch();
 
-    return is_array($state)
-        && $state['status'] === 'active'
+    if (!is_array($state)) {
+        return false;
+    }
+
+    // Enrollment must reach pending recipients so they can confirm their opt-in.
+    if ($message['message_type'] === 'consent_confirmation') {
+        return $state['status'] === 'pending';
+    }
+
+    return $state['status'] === 'active'
         && ($message['message_type'] !== 'result_delivery' || $state['delivery_mode'] !== 'paused');
 }
 
