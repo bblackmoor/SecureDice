@@ -7,6 +7,8 @@ require_once __DIR__ . '/lib.php';
 require_once __DIR__ . '/consent.php';
 
 send_security_headers();
+consent_start_session();
+header('Cache-Control: no-store, private');
 
 function signed_label(int $n): string
 {
