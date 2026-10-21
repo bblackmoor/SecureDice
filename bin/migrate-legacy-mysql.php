@@ -42,43 +42,60 @@ function legacy_roll_matches(array $source, array $copy): bool
         && (string) $source['results'] === (string) $copy['results'];
 }
 
+/** Read bounded ID ranges so shared-host query limits cannot interrupt a full-table cursor. */
+function iterate_legacy_rolls(PDO $source, string $table, int $maxId): Generator
+{
+    $lastId = null;
+
+    do {
+        $lowerBound = $lastId === null ? '' : " AND id > {$lastId}";
+        $scan = $source->query("SELECT id, dice_rolled, hash, results FROM `{$table}`
+            WHERE id <= {$maxId}{$lowerBound} ORDER BY id LIMIT 10000");
+        $read = 0;
+
+        try {
+            while (($row = $scan->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $lastId = (int) $row['id'];
+                ++$read;
+                yield $row;
+            }
+        } finally {
+            $scan->closeCursor();
+        }
+    } while ($read === 10000);
+}
+
 function scan_legacy_rolls(PDO $source, PDO $target, string $table, int $maxId, bool $copy): int
 {
-    // An unbuffered cursor keeps even a 1.4 GiB table out of PHP memory.
-    // Separate connections permit target queries while the source cursor is active.
-    $scan = $source->query("SELECT id, dice_rolled, hash, results FROM `{$table}`
-        WHERE id <= {$maxId} ORDER BY id");
+    // Separate connections permit target queries while each unbuffered batch is active.
     $lookup = $target->prepare('SELECT old_id, dice_rolled, legacy_hash, results
         FROM sd2_legacy_rolls WHERE old_id = :old_id');
     $insert = $target->prepare('INSERT INTO sd2_legacy_rolls
         (old_id, dice_rolled, legacy_hash, results) VALUES (:id, :dice, :hash, :results)');
     $count = 0;
 
-    try {
-        while (($row = $scan->fetch(PDO::FETCH_ASSOC)) !== false) {
-            $lookup->execute([':old_id' => (int) $row['id']]);
-            $saved = $lookup->fetch(PDO::FETCH_ASSOC);
-            $lookup->closeCursor();
+    foreach (iterate_legacy_rolls($source, $table, $maxId) as $row) {
+        $lookup->execute([':old_id' => (int) $row['id']]);
+        $saved = $lookup->fetch(PDO::FETCH_ASSOC);
+        $lookup->closeCursor();
 
-            if ($saved === false && $copy) {
-                $insert->execute([
-                    ':id' => (int) $row['id'],
-                    ':dice' => (int) $row['dice_rolled'],
-                    ':hash' => (string) $row['hash'],
-                    ':results' => (string) $row['results'],
-                ]);
-            } elseif ($saved === false || !legacy_roll_matches($row, $saved)) {
-                throw new RuntimeException('Legacy roll mismatch at ID ' . $row['id']);
-            }
-
-            ++$count;
-            if ($count % 10000 === 0) {
-                fwrite(STDOUT, ($copy ? 'Copied/checked ' : 'Verified ') . "{$count} rolls\n");
-            }
+        if ($saved === false && $copy) {
+            $insert->execute([
+                ':id' => (int) $row['id'],
+                ':dice' => (int) $row['dice_rolled'],
+                ':hash' => (string) $row['hash'],
+                ':results' => (string) $row['results'],
+            ]);
+        } elseif ($saved === false || !legacy_roll_matches($row, $saved)) {
+            throw new RuntimeException('Legacy roll mismatch at ID ' . $row['id']);
         }
-    } finally {
-        $scan->closeCursor();
+
+        ++$count;
+        if ($count % 10000 === 0) {
+            fwrite(STDOUT, ($copy ? 'Copied/checked ' : 'Verified ') . "{$count} rolls\n");
+        }
     }
+
     return $count;
 }
 
