@@ -219,6 +219,7 @@ try {
     email_test_assert($batched[0]['subject'] === '2 Secure Dice results', 'The batch subject is wrong.');
 
     $recipientId = (int) $connection->query('SELECT id FROM sd2_recipients ORDER BY id LIMIT 1')->fetchColumn();
+    $connection->prepare("UPDATE sd2_recipients SET status = 'pending' WHERE id = ?")->execute([$recipientId]);
     queue_consent_message($connection, $recipientId, 'consent_confirmation', [
         'email' => $addresses[0],
         'confirmation_token' => consent_base64url_encode(str_repeat('x', 32)),
