@@ -576,7 +576,7 @@ function cancel_email_batch(array $messages, string $category): void
     }
 }
 
-function email_result_plain_text(array $data): string
+function email_result_rows(array $data): array
 {
     $lines = [];
 
@@ -605,11 +605,10 @@ function email_result_plain_text(array $data): string
             }
         }
 
-        $lines[] = 'Set ' . $set['number'] . ': '
-            . implode(' ', $terms) . ' = ' . $set['total'];
+        $lines[] = [(int) $set['number'], implode(' ', $terms), (int) $set['total']];
     }
 
-    return implode("\n", $lines);
+    return $lines;
 }
 
 function build_consent_email_message(string $type, string $email, array $payload): ?array
@@ -639,42 +638,52 @@ function build_consent_email_message(string $type, string $email, array $payload
     return null;
 }
 
-function load_email_request_counts(int $requestId): ?array
+function build_result_email_section(array $message): array
 {
-    $request = result_storage_connection()->prepare(
-        'SELECT intended_count, opted_in_count, not_opted_in_count, not_queued_count
-        FROM sd2_email_requests WHERE id = :id'
-    );
-    $request->execute([':id' => $requestId]);
-    $counts = $request->fetch();
-
-    return is_array($counts) ? $counts : null;
-}
-
-function build_result_email_section(array $message): string
-{
-    $record = load_result_record((string) $message['result_id']);
-
+    $id = (string) $message['result_id'];
+    $record = load_result_record($id);
     if ($record === null) {
         throw new ResultIntegrityException('A queued result no longer exists.');
     }
 
-    $counts = load_email_request_counts((int) $message['request_id']);
-    $verify = email_url('verify.php?id=' . rawurlencode((string) $message['result_id']));
-    $section = "Secure Dice result {$message['result_id']}\n"
-        . email_result_plain_text($record['data']) . "\nVerify: {$verify}";
-
-    if ($counts !== null) {
-        $section .= "\n\nDelivery was requested for {$counts['intended_count']} recipient(s). "
-            . "{$counts['opted_in_count']} were opted in. "
-            . "{$counts['not_opted_in_count']} were not opted in and were not sent this result.";
-
-        if ((int) $counts['not_queued_count'] > 0) {
-            $section .= "\n{$counts['not_queued_count']} opted-in recipient(s) were not queued because of delivery settings or limits.";
+    $data = $record['data'];
+    $count = count($data['sets']);
+    $title = $count === 1 ? '1 set' : "$count sets";
+    $expression = '';
+    foreach ($data['specification']['pools'] ?? [] as $pool) {
+        if ($pool === null) {
+            continue;
+        }
+        $term = $pool['dice_count'] . $pool['die_label'];
+        if ($pool['modifier'] != 0) {
+            $term .= ($pool['modifier'] > 0 ? ' + ' : ' - ') . abs($pool['modifier']);
+        }
+        if ($pool['mode'] !== 'sum') {
+            $term .= ' (' . $pool['mode'] . ')';
+        }
+        if ($expression === '') {
+            $expression = $term;
+        } else {
+            $expression .= ($pool['operator'] < 0 ? ' - (' : ' + (') . $term . ')';
         }
     }
+    if ($expression !== '') {
+        $title .= ' of ' . $expression;
+    }
 
-    return $section;
+    $text = [$title, ''];
+    $html = '<h2>' . h($title) . '</h2><table cellpadding="5"><thead><tr>'
+        . '<th>Set</th><th>Dice</th><th>Total</th></tr></thead><tbody>';
+    foreach (email_result_rows($data) as [$number, $dice, $total]) {
+        $text[] = "Set $number: $dice = $total";
+        $html .= "<tr><th scope=\"row\">$number</th><td>" . h($dice)
+            . "</td><td align=\"right\"><strong>$total</strong></td></tr>";
+    }
+    $verify = email_url('verify.php?id=' . rawurlencode($id));
+    $html .= '</tbody></table><p><a href="' . h($verify) . '">Verify this roll</a><br>Result ID '
+        . h($id) . '</p>';
+    $text[] = "\nVerify this roll: $verify\nResult ID $id";
+    return ['title' => $title, 'text' => implode("\n", $text), 'html' => $html];
 }
 
 function build_email_message(array $messages): array
@@ -694,14 +703,17 @@ function build_email_message(array $messages): array
         : issue_recipient_unsubscribe_token((int) $first['recipient_id']);
     $unsubscribe = email_url('unsubscribe.php?token=' . rawurlencode($unsubscribeToken));
     $sections = array_map('build_result_email_section', $messages);
-    $body = implode("\n\n----------------------------------------\n\n", $sections)
-        . "\n\nStop all Secure Dice email:\n{$unsubscribe}";
+    $body = implode("\n\n----------------------------------------\n\n", array_column($sections, 'text'))
+        . "\n\nYou received this email because you opted in to Secure Dice.\nUnsubscribe from Secure Dice emails:\n{$unsubscribe}";
 
     return [
         'to' => $email,
         'subject' => count($messages) > 1
             ? count($messages) . ' Secure Dice results'
-            : 'Secure Dice result',
+            : 'Secure Dice result · ' . $sections[0]['title'],
+        'html' => implode('<hr>', array_column($sections, 'html'))
+            . '<hr><p>You received this email because you opted in to Secure Dice.<br>'
+            . '<a href="' . h($unsubscribe) . '">Unsubscribe from Secure Dice emails</a></p>',
         'text' => $body,
     ];
 }

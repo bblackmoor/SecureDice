@@ -145,8 +145,10 @@ try {
 
     foreach ($delivered as $message) {
         email_test_assert(
-            str_contains($message['text'], '8 were opted in. 2 were not opted in'),
-            'The aggregate opt-in count was omitted from a result email.'
+            str_contains($message['html'], '<strong>4</strong>')
+                && str_contains($message['text'], 'Set 1: 4 = 4')
+                && !str_contains($message['text'], 'Delivery was requested'),
+            'The result email did not render the expected roll.'
         );
     }
 

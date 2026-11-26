@@ -78,7 +78,7 @@ function send_smtp_message(array $message): string
         $mail->setFrom($config['fromAddress'], $config['fromName']);
         $mail->addAddress((string) $message['to']);
         $mail->Subject = (string) $message['subject'];
-        $mail->Body = nl2br(h((string) $message['text']));
+        $mail->Body = $message['html'] ?? nl2br(h((string) $message['text']));
         $mail->AltBody = (string) $message['text'];
         $mail->isHTML(true);
         $mail->send();
