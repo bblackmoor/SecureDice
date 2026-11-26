@@ -399,17 +399,22 @@
         applyUI();
     }
 
-    function prepareFormForReset() {
+    function resetRollForm(form) {
+        form.reset();
+
+        // Native reset restores URL presets. Reset the roll to its unconfigured values.
         const primary = getPrimaryDiceControls();
         const secondary = getSecondaryDiceControls();
-
-        [primary.diceCount, primary.dieType, primary.mode].forEach(function (control) {
-            if (control) {
-                control.disabled = false;
-            }
-        });
-
-        setSecondaryControlsHidden(secondary, false);
+        primary.diceCount.value = "3";
+        primary.dieType.value = "d6";
+        primary.mode.value = "sum";
+        form.elements.mod.value = "0";
+        setRowBDefaults(secondary.diceCount, secondary.dieType, secondary.mode, secondary.modifier);
+        form.elements.repeat.value = "1";
+        form.elements.sort_results.checked = false;
+        clearValidity(primary.mode);
+        clearValidity(secondary.mode);
+        applyUI();
     }
 
     function validateFormBeforeSubmit(event) {
@@ -447,9 +452,7 @@
 
         if (resetBtn && form) {
             resetBtn.addEventListener("click", function () {
-                prepareFormForReset();
-                form.reset();
-                applyUI();
+                resetRollForm(form);
                 flashButtonText(resetBtn, "Reset!", 900);
             });
         }
