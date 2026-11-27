@@ -2,40 +2,24 @@
 
 declare(strict_types=1);
 
-function rpg_site_assets(): void
-{
-    ?>
-    <link rel="icon" href="theme/icon.png">
-    <link rel="stylesheet" href="theme/theme.css">
-    <link rel="stylesheet" href="theme/standalone.css">
-    <?php
+// Only use the shared theme from the RPG Library site's own document root.
+$host = $_SERVER['HTTP_HOST'] ?? '';
+if (preg_match('/\A(?:www\.)?rpglibrary\.org(?::(?:80|443))?\z/i', $host) === 1) {
+    $documentRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '/');
+    if ($documentRoot !== false && str_starts_with(__DIR__, $documentRoot . DIRECTORY_SEPARATOR)) {
+        $layout = $documentRoot . '/standalone/_layout.php';
+        $theme = $documentRoot . '/extensions/RpgLibraryTheme';
+
+        if (is_readable($layout)
+            && is_file($documentRoot . '/favicon.ico')
+            && is_file($theme . '/icon.png')
+            && is_file($theme . '/theme.css')
+            && is_file($theme . '/standalone.css')
+        ) {
+            require_once $layout;
+            return;
+        }
+    }
 }
 
-function rpg_site_header(): void
-{
-    ?>
-    <header class="rpg-site-header">
-        <div class="rpg-site-inner">
-            <a class="rpg-brand" href="https://www.rpglibrary.org/">
-                <img src="theme/icon.png" alt="" width="52" height="52">
-                <span>RPG Library</span>
-            </a>
-            <nav aria-label="RPG Library navigation">
-                <a href="https://www.rpglibrary.org/index.php?title=Tools">Tools</a>
-            </nav>
-        </div>
-    </header>
-    <?php
-}
-
-function rpg_site_footer(): void
-{
-    ?>
-    <footer class="rpg-site-footer">
-        <nav class="rpg-site-inner" aria-label="Site information">
-            <a href="https://www.rpglibrary.org/index.php?title=RPG_Library:About">About RPG Library</a>
-            <a href="https://www.rpglibrary.org/index.php?title=RPG_Library:Privacy_policy">Privacy policy</a>
-        </nav>
-    </footer>
-    <?php
-}
+require_once __DIR__ . '/layout-local.php';

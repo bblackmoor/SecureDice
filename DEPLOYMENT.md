@@ -12,7 +12,7 @@ You need:
 - The `securedice/` directory from Git or the current `SecureDice-<version>.zip` from GitHub Releases.
 - SSH or DreamHost File Manager access.
 
-The application directory includes the theme assets and PHPMailer.
+The application directory includes the theme assets and PHPMailer. On `rpglibrary.org` and `www.rpglibrary.org`, Secure Dice uses the shared site layout and theme when those files are present under the site’s document root. It uses the bundled theme everywhere else.
 
 ## 1. Prepare MySQL
 
