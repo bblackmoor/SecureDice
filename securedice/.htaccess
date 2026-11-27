@@ -1,0 +1,7 @@
+DirectoryIndex securedice.php
+Options -Indexes -MultiViews
+
+RewriteEngine On
+RewriteRule ^index\.php$ securedice.php [R=301,L]
+RewriteRule ^(?:vendor|bin)(?:/|$) - [F,L]
+RewriteRule (^|/)\. - [F,L]

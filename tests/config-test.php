@@ -14,7 +14,7 @@ $originalHome = getenv('HOME');
 putenv('HOME=' . $temporaryDirectory);
 putenv('SECUREDICE_CONFIG_PATH');
 
-require_once dirname(__DIR__) . '/config.php';
+require_once dirname(__DIR__) . '/securedice/config.php';
 
 function config_test_assert(bool $condition, string $message): void
 {

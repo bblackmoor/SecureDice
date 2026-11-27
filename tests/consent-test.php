@@ -7,7 +7,7 @@ securedice_test_reset();
 
 putenv('SECUREDICE_SECRET=' . str_repeat('42', 32));
 
-require_once dirname(__DIR__) . '/consent.php';
+require_once dirname(__DIR__) . '/securedice/consent.php';
 
 function consent_test_assert(bool $condition, string $message): void
 {

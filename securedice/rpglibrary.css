@@ -1,0 +1,53 @@
+.rpg-standalone.rpg-secure-dice {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    background-image: none;
+    color: var(--rpg-text);
+    font-family: system-ui, sans-serif;
+}
+
+.rpg-secure-dice .site-title-wrap {
+    padding: 0;
+    background: none;
+    box-shadow: none;
+}
+
+.rpg-secure-dice .site-title {
+    flex: 1 0 100%;
+}
+
+.rpg-secure-dice :is(.site-subtitle, .site-footer, .site-footer p) {
+    color: var(--rpg-text);
+}
+
+.rpg-secure-dice .site-subtitle a,
+.rpg-secure-dice .site-footer a {
+    color: var(--rpg-red);
+}
+
+.rpg-secure-dice .card {
+    color-scheme: light;
+    border-color: #cdd7de;
+    box-shadow: none;
+}
+
+.rpg-secure-dice .card :is(h2, h3, h4) {
+    color: #151719;
+}
+
+.rpg-secure-dice .sd2-action-btn:any-link {
+    color: var(--sd2-color-white);
+}
+
+.rpg-secure-dice .floating-actions {
+    position: sticky;
+    top: 0;
+    right: auto;
+    width: auto;
+    flex-flow: row wrap;
+    margin-block: 0 1rem;
+    padding-block: .65rem;
+    background: var(--rpg-paper);
+    box-shadow: none;
+}

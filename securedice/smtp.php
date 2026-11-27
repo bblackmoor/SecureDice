@@ -47,13 +47,9 @@ function smtp_configuration(): array
 
 function send_smtp_message(array $message): string
 {
-    $autoload = __DIR__ . '/vendor/autoload.php';
-
-    if (!is_file($autoload)) {
-        throw new EmailConfigurationException('Composer dependencies are not installed.');
-    }
-
-    require_once $autoload;
+    require_once __DIR__ . '/vendor/phpmailer/src/Exception.php';
+    require_once __DIR__ . '/vendor/phpmailer/src/PHPMailer.php';
+    require_once __DIR__ . '/vendor/phpmailer/src/SMTP.php';
     $config = smtp_configuration();
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
 

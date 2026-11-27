@@ -1,5 +1,4 @@
 _old
-/data/*
-!/data/.htaccess
-/vendor/
+/securedice/data/*
+!/securedice/data/.htaccess
 .securedice.env

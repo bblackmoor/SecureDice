@@ -3,7 +3,7 @@
 set -eu
 
 repo_root=$(git rev-parse --show-toplevel)
-version_file="$repo_root/VERSION"
+version_file="$repo_root/securedice/VERSION"
 
 if [ ! -f "$version_file" ]; then
     echo "Error: $version_file not found."

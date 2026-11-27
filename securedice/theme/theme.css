@@ -1,0 +1,485 @@
+@media screen {
+    body.skin-vector-2022,
+    body.rpg-standalone,
+    .rpg-site-header.rpg-standalone {
+        --rpg-display: "EB Garamond", Georgia, serif;
+        --rpg-heading: var(--rpg-display);
+        --rpg-red: light-dark(#792e35, #f3aaa9);
+        --rpg-blue: light-dark(#304d6f, #abc9ec);
+        --rpg-paper: light-dark(#f4f7f9, #202122);
+        --rpg-outer: light-dark(#e8eef2, #161616);
+        --rpg-rule: light-dark(#cdd7de, #505052);
+        --rpg-stripe: light-dark(#edf2f6, #282828);
+        --rpg-table-head: light-dark(#e2eaf0, #333336);
+        --rpg-text: light-dark(#151719, #eaecf0);
+        background: var(--rpg-outer);
+    }
+
+    .rpg-site-header.rpg-standalone {
+        display: block;
+        color-scheme: light dark;
+    }
+
+    /* Main reading surface is near-white; header, menus and footer are pale blue-grey. */
+    .skin-vector-2022 :is(.vector-header-container, .mw-page-container, .vector-sticky-header) {
+        background-color: var(--rpg-outer);
+    }
+
+    .skin-vector-2022 .mw-content-container {
+        background-color: var(--rpg-paper);
+    }
+
+    /* Vector's pinned Contents panel has its own white background;
+       blend it with the pale blue-grey left navigation instead. */
+    .skin-vector-2022 .vector-column-start #vector-toc-pinned-container {
+        background-color: var(--rpg-outer);
+        padding: 0;
+    }
+
+    /* Avoid the white/black fade strip below a scrollable Contents panel. */
+    .skin-vector-2022 .vector-column-start .vector-sticky-pinned-container::after {
+        content: none;
+    }
+
+    /* Vector adds a white (black in dark mode) sticky scroll-fade strip
+       at the bottom of pinned menus. The scrollbar already shows overflow;
+       remove the strip so the right sidebar stays uniformly blue-grey. */
+    .skin-vector-2022 .vector-column-end .vector-sticky-pinned-container::after {
+        content: none;
+    }
+
+    /* Vector separately paints its inner header white; override that, too. */
+    .skin-vector-2022 .vector-header-container,
+    .skin-vector-2022 .vector-header-container .mw-header,
+    .skin-vector-2022 .vector-header-container .vector-sticky-header,
+    .skin-vector-2022 #mw-navigation,
+    .skin-vector-2022 #mw-navigation #vector-main-menu-pinned-container,
+    .skin-vector-2022 #vector-page-tools-pinned-container,
+    .skin-vector-2022 #vector-appearance-pinned-container,
+    .skin-vector-2022 .vector-column-end {
+        background-color: var(--rpg-outer);
+    }
+
+    @media screen and (min-width: 75rem) {
+        .skin-vector-2022.action-view .vector-column-end {
+            box-shadow: calc(-1 * (var(--rpg-gutter) - .75rem)) 0 var(--rpg-outer);
+        }
+
+        /* Fill the full sidebar track, including empty space below menus. */
+        html:is(.vector-feature-page-tools-pinned-enabled, .vector-feature-appearance-pinned-clientpref-1)
+            .skin-vector-2022.action-view .mw-content-container {
+            background: linear-gradient(
+                to right,
+                var(--rpg-paper) calc(100% - var(--rpg-tools-width) - var(--rpg-gutter) + .75rem),
+                var(--rpg-outer) 0
+            );
+        }
+    }
+
+    /* Separate the supplemental navigation from the primary site links. */
+    .skin-vector-2022 #p-Wiki_Navigation {
+        margin-block-start: 2rem;
+    }
+
+    .skin-vector-2022 .mw-logo {
+        min-width: 0;
+    }
+
+    .skin-vector-2022 .mw-logo-icon {
+        display: block;
+        flex-shrink: 0;
+        inline-size: 3.25rem;
+        block-size: 3.25rem;
+        margin-inline-end: .3rem;
+    }
+
+    .skin-vector-2022 strong.mw-logo-wordmark {
+        font-family: var(--rpg-display);
+        font-size: clamp(1.2rem, 2.5vw, 1.7rem);
+        font-weight: 600;
+        line-height: 1.08;
+        letter-spacing: -.02em;
+        white-space: nowrap;
+        color: var(--rpg-text);
+    }
+
+    .skin-vector-2022 .vector-body {
+        color: var(--rpg-text);
+        /* Follow Vector's persisted Small / Standard / Large preference. */
+        font-family: system-ui, sans-serif;
+        font-size: var(--font-size-medium, 1rem);
+        line-height: var(--line-height-content, 1.65);
+        min-width: 0;
+        overflow-wrap: break-word;
+    }
+
+    /* The RPG Library layout is always wide, with readable prose measures.
+       Hide Vector's redundant width preference in both pinned and popup menus. */
+    .skin-vector-2022 #skin-client-prefs-vector-feature-limited-width {
+        display: none;
+    }
+
+    .skin-vector-2022 :is(.mw-page-container, .vector-sticky-header, .mw-header) {
+        max-width: none;
+    }
+
+    .skin-vector-2022 .vector-body .mw-parser-output > p {
+        max-inline-size: 74ch;
+    }
+
+    .skin-vector-2022 :is(.firstHeading, .mw-parser-output h1, .mw-parser-output h2, .mw-parser-output h3) {
+        font-family: var(--rpg-heading);
+        font-weight: 400;
+        color: var(--rpg-text);
+        line-height: 1.16;
+    }
+
+    /* Use EB Garamond for page titles, headings, and wordmarks. */
+    .skin-vector-2022 :is(.firstHeading, .mw-parser-output h1, .rpg-wordmark, .wordmark) {
+        font-family: var(--rpg-display);
+        font-weight: 600;
+    }
+
+    .skin-vector-2022 .firstHeading {
+        font-size: clamp(2rem, 4.25vw, 5rem);
+    }
+
+    .skin-vector-2022 :is(.mw-parser-output h2, .vector-toc .vector-pinnable-header) {
+        border-color: var(--rpg-rule);
+    }
+
+    .skin-vector-2022 .mw-parser-output h2 {
+        font-size: 1.85em;
+    }
+
+    /* Keep hyperlink colors, but do not underline links anywhere in the theme. */
+    .skin-vector-2022 a:any-link {
+        text-decoration: none;
+    }
+
+    .skin-vector-2022 :is(.mw-parser-output, .vector-toc) a:link:not(.new, .image, .mw-file-description) {
+        color: var(--rpg-red);
+        text-decoration: none;
+    }
+
+    .skin-vector-2022 :is(.mw-parser-output, .vector-toc) a:visited:not(.new, .image, .mw-file-description) {
+        color: var(--rpg-blue);
+        text-decoration: none;
+    }
+
+    .skin-vector-2022 :is(.mw-parser-output, .vector-toc) a:is(:hover, :focus-visible),
+    .skin-vector-2022 .mw-parser-output a.new {
+        text-decoration: none;
+    }
+
+    .skin-vector-2022 .mw-parser-output :is(img, video) {
+        max-inline-size: 100%;
+        block-size: auto;
+    }
+
+    .skin-vector-2022 .mw-parser-output ul.gallery.mw-gallery-traditional,
+    .skin-vector-2022 .mw-parser-output ul.gallery.mw-gallery-nolines,
+    .skin-vector-2022 .mw-parser-output ul.gallery.mw-gallery-packed,
+    .skin-vector-2022 .mw-parser-output ul.gallery.mw-gallery-packed-hover,
+    .skin-vector-2022 .mw-parser-output ul.gallery.mw-gallery-packed-overlay {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .65rem;
+        align-items: flex-start;
+    }
+
+    .skin-vector-2022 .mw-parser-output ul.gallery .gallerybox,
+    .skin-vector-2022 .mw-parser-output ul.gallery .gallerybox > div,
+    .skin-vector-2022 .mw-parser-output ul.gallery .gallerybox .thumb {
+        box-sizing: border-box;
+        max-inline-size: 100%;
+    }
+
+    .skin-vector-2022 .mw-parser-output ul.gallery .gallerytext {
+        overflow-wrap: anywhere;
+    }
+
+    .skin-vector-2022 .rpg-table-scroll {
+        max-inline-size: 100%;
+        overflow-x: auto;
+        margin-block: .5rem 1rem;
+    }
+
+    .skin-vector-2022 .rpg-table-scroll > table {
+        margin: 0;
+        color: var(--rpg-text);
+        font-size: .94em;
+        line-height: 1.45;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .skin-vector-2022 .rpg-table-scroll > .wikitable {
+        background: var(--rpg-paper);
+        border-color: var(--rpg-rule);
+    }
+
+    .skin-vector-2022 .rpg-table-scroll > .wikitable > :is(thead, tbody, tfoot) > tr > :is(td, th) {
+        border-color: var(--rpg-rule);
+        padding: .42rem .65rem;
+    }
+
+    .skin-vector-2022 .rpg-table-scroll > .wikitable > tbody > tr:nth-child(even) > td {
+        background-color: var(--rpg-stripe);
+    }
+
+    .skin-vector-2022 .rpg-table-scroll > .wikitable > :is(thead, tbody, tfoot) > tr > th {
+        background-color: var(--rpg-table-head);
+    }
+
+    .skin-vector-2022 .rpg-table-scroll[data-sticky] > table > :is(thead, tbody) > tr > th:first-child {
+        position: sticky;
+        inset-inline-start: 0;
+        z-index: 1;
+        box-shadow: 1px 0 var(--rpg-rule);
+    }
+
+    .skin-vector-2022 .rpg-table-scroll-hint {
+        margin: .45rem 0 0;
+        font-size: .85em;
+        color: var(--rpg-text);
+    }
+
+    .skin-vector-2022 .rpg-table-scroll:focus-visible {
+        outline: 2px solid var(--rpg-blue);
+        outline-offset: 2px;
+    }
+    .skin-vector-2022.page-Main_Page.action-view .vector-page-titlebar {
+        padding-bottom: 2px;
+    }
+    /* Preserve the page heading for assistive technology and Vector's page tools. */
+    .skin-vector-2022.page-Main_Page.action-view .vector-page-titlebar > .firstHeading {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+/* Keep the die and its neighboring wordmark visible on narrow screens. */
+@media screen and (max-width: 74.99rem) {
+    .skin-vector-2022 .mw-logo-icon {
+        margin-inline-end: .2rem;
+    }
+}
+@media screen and (max-width: 38rem) {
+    .skin-vector-2022 .mw-logo-icon {
+        display: block;
+        inline-size: 2.4rem;
+        block-size: 2.4rem;
+    }
+    .skin-vector-2022 strong.mw-logo-wordmark {
+        font-size: clamp(1rem, 4vw, 1.2rem);
+    }
+    .skin-vector-2022 .mw-logo-container {
+        max-inline-size: none;
+    }
+    .skin-vector-2022 .mw-header .vector-header-start {
+        gap: .35rem;
+    }
+}
+@media screen and (max-width: 26rem) {
+    .skin-vector-2022 .mw-logo-icon {
+        inline-size: 1.8rem;
+        block-size: 1.8rem;
+        margin-inline-end: .1rem;
+    }
+    .skin-vector-2022 strong.mw-logo-wordmark {
+        font-size: 1rem;
+    }
+    .skin-vector-2022 .mw-header .vector-header-start {
+        gap: .2rem;
+    }
+}
+
+/* Match Vector's desktop grid breakpoint so saved width preferences
+   cannot constrain the content column, even at intermediate widths. */
+@media screen and (min-width: 1120px) {
+    .skin-vector-2022 .mw-body {
+        grid-template-columns: minmax(0, 1fr) min-content;
+    }
+}
+
+@media screen and (min-width: 75rem) {
+    .skin-vector-2022.action-view {
+        --rpg-page-start: 1rem;
+        --rpg-page-end: clamp(1.5rem, 2.9vw, 3.25rem);
+        --rpg-menu-width: 9rem;
+        --rpg-tools-width: 12rem;
+        --rpg-gutter: 1.75rem;
+        --rpg-content-start: calc(var(--rpg-page-start) + var(--rpg-menu-width) + var(--rpg-gutter));
+    }
+
+    .skin-vector-2022.action-view :is(.mw-header, .mw-page-container) {
+        padding-inline: var(--rpg-page-start) var(--rpg-page-end);
+    }
+
+    .skin-vector-2022.action-view .mw-header {
+        display: block;
+        min-block-size: 12rem;
+        padding-block: 0;
+        /* Let the pinned tools extend upward beside the masthead. */
+        z-index: auto;
+    }
+
+    .skin-vector-2022.action-view #siteNotice:empty {
+        display: none;
+    }
+
+    .vector-pinnable-header-label,
+    .vector-pinnable-element .mw-portlet-Wiki_Navigation .vector-menu-heading {
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .skin-vector-2022.action-view .vector-header-start > .vector-main-menu-landmark {
+        position: absolute;
+        inset-block-start: .65rem;
+        inset-inline-start: var(--rpg-page-start);
+        z-index: 2;
+    }
+
+    .skin-vector-2022.action-view .vector-header-start .mw-logo {
+        position: relative;
+        inline-size: fit-content;
+        /* Shift the die and large wordmark together; the search/account area is untouched. */
+        margin-block-start: 3rem;
+    }
+
+    /* Decorative repeat of the site title centered immediately above the d6 hex. */
+    .skin-vector-2022.action-view .vector-header-start .mw-logo::before {
+        content: "RPG Library";
+        position: absolute;
+        inset-block-start: -2.25rem;
+        inset-inline-start: .25rem;
+        inline-size: 8.5rem;
+        text-align: left;
+        font-family: var(--rpg-display);
+        font-size: 1.7rem;
+        font-weight: 600;
+        line-height: 1.08;
+        letter-spacing: -.02em;
+        white-space: nowrap;
+        color: var(--rpg-text);
+        pointer-events: none;
+    }
+
+    .skin-vector-2022.action-view .vector-header-start .mw-logo-icon {
+        inline-size: 8.5rem;
+        block-size: 8.5rem;
+        margin-inline: .5rem .9rem;
+    }
+
+    .skin-vector-2022.action-view .vector-header-start strong.mw-logo-wordmark {
+        position: relative;
+        inset-block-start: -0.2rem;
+        font-size: clamp(3.5rem, 7vw, 6.2rem);
+        max-inline-size: none;
+    }
+
+    /* Only the homepage has the large site wordmark.
+       Subsidiary pages keep the die and small label above it. */
+    .skin-vector-2022.action-view:not(.page-Main_Page)
+        .vector-header-start .mw-logo-container {
+        display: none;
+    }
+
+    .skin-vector-2022.action-view .vector-header-end {
+        position: absolute;
+        inset-block-start: .7rem;
+        inset-inline: var(--rpg-content-start) var(--rpg-page-end);
+        z-index: 1;
+    }
+
+    .skin-vector-2022.action-view .vector-header-end .vector-search-box {
+        margin-inline-start: 0;
+        min-inline-size: 0;
+    }
+
+    .skin-vector-2022.action-view .vector-search-box .vector-typeahead-search-container {
+        max-inline-size: 30rem;
+    }
+
+    .skin-vector-2022.action-view .vector-search-box
+        .cdx-typeahead-search--auto-expand-width:not(.cdx-typeahead-search--expanded) {
+        margin-inline-start: 0;
+    }
+
+    /* Align subsidiary-page tabs with the Main Menu and Tools headings. */
+    .skin-vector-2022.action-view:not(.page-Main_Page) .mw-content-container {
+        margin-block-start: -4.2rem;
+    }
+
+    /* Move only the left edge of the near-white content surface 0.75rem
+       toward the navigation, keeping the "Main Page" text in place.
+       This trims the excess blue-grey space beyond the "hide" button. */
+    .skin-vector-2022.action-view .mw-page-container-inner {
+        grid-template-columns: var(--rpg-menu-width) minmax(0, 1fr);
+        grid-template-areas:
+            "siteNotice siteNotice"
+            "columnStart pageContent"
+            "footer footer";
+        column-gap: calc(var(--rpg-gutter) - .75rem);
+    }
+
+    .skin-vector-2022.action-view .mw-content-container {
+        padding-inline-start: .75rem;
+        margin-block-start: -.28rem;
+    }
+
+    .skin-vector-2022.action-view .mw-body {
+        grid-template-columns: minmax(0, 1fr) min-content;
+        column-gap: var(--rpg-gutter);
+    }
+
+    .skin-vector-2022.action-view .vector-column-start {
+        margin-block-start: .5rem;
+    }
+
+    .skin-vector-2022.action-view #vector-main-menu-pinned-container {
+        padding-inline: 0;
+    }
+
+    /* Keep Tools aligned with Main menu while coloring the space above it. */
+    .skin-vector-2022.action-view .vector-column-end {
+        margin-block-start: 0;
+        padding-block-start: .5rem;
+    }
+
+    .skin-vector-2022.action-view:not(.page-Main_Page) .vector-column-end {
+        padding-block-start: 4.5rem;
+    }
+
+    html:is(.vector-feature-page-tools-pinned-enabled, .vector-feature-appearance-pinned-clientpref-1)
+        .skin-vector-2022.action-view .vector-column-end {
+        inline-size: var(--rpg-tools-width);
+    }
+
+    html:is(.vector-feature-page-tools-pinned-enabled, .vector-feature-appearance-pinned-clientpref-1)
+        .skin-vector-2022.action-view .vector-header-end {
+        inset-inline-end: calc(var(--rpg-page-end) + var(--rpg-gutter));
+    }
+}
+
+/* Edit/preview pages: replace Vector's unpainted 2.8rem top margin
+   with blue-grey-filled padding, preserving the pinned Tools position. */
+@media screen and (min-width: 70rem) {
+    .skin-vector-2022:is(.action-edit, .action-submit) .vector-column-end {
+        margin-block-start: 0;
+        padding-block-start: 2.8rem;
+    }
+}
+
+@media print {
+    .rpg-error-page .rpg-site-header,
+    .rpg-error-page .rpg-site-footer {
+        display: none;
+    }
+}

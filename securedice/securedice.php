@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
+require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/consent.php';
 
 send_security_headers();
@@ -183,12 +184,16 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
     <link rel="stylesheet" href="securedice.base.css">
     <link rel="stylesheet" href="securedice.mobile.css">
     <script src="securedice.js?v=<?= h(app_version()) ?>" defer></script>
+    <?php rpg_site_assets(); ?>
+    <link rel="stylesheet" href="rpglibrary.css">
 </head>
-<body>
+<body class="rpg-standalone rpg-secure-dice">
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
-<header class="site-header" role="banner">
+<?php rpg_site_header(); ?>
+<div class="rpg-content sd2-document">
+<div class="site-header">
     <div class="site-header-inner">
         <div class="site-title-wrap">
             <h1 class="site-title">Secure Dice</h1>
@@ -210,7 +215,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
             Already have a result ID? <a href="verify.php">Verify a stored result.</a>
         </p>
     </div>
-</header>
+</div>
 
 <main id="main-content" tabindex="-1">
 <form id="sd2-form" method="post" action="roll.php">
@@ -466,7 +471,7 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
 </form>
 </main>
 
-<footer class="site-footer" role="contentinfo">
+<div class="site-footer">
     <p>
         Copyright &copy; 2005-2026 Brandon Blackmoor
         <a href="mailto:bblackmoor@blackgate.net?subject=Secure%20Dice">&lt;bblackmoor@blackgate.net&gt;</a><br>
@@ -476,7 +481,9 @@ $exampleUrl = $rollPageUrl . '?' . $exampleQuery;
         Last updated: <?= h(app_updated_date()) ?>
         (version <?= h(app_version()) ?>)
     </p>
-</footer>
+</div>
+</div>
+<?php rpg_site_footer(); ?>
 
 </body>
 </html>

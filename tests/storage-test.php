@@ -7,7 +7,7 @@ securedice_test_reset();
 
 putenv('SECUREDICE_SECRET=' . str_repeat('31', 32));
 
-require_once dirname(__DIR__) . '/storage.php';
+require_once dirname(__DIR__) . '/securedice/storage.php';
 
 function storage_test_assert(bool $condition, string $message): void
 {

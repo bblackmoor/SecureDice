@@ -11,7 +11,7 @@ function ui_test_assert(bool $condition, string $message): void
 
 function ui_test_file(string $relativePath): string
 {
-    $contents = file_get_contents(dirname(__DIR__) . '/' . $relativePath);
+    $contents = file_get_contents(dirname(__DIR__) . '/securedice/' . $relativePath);
 
     if (!is_string($contents)) {
         throw new RuntimeException("Could not read {$relativePath}.");
@@ -79,7 +79,7 @@ ui_test_assert(
     'The complete secondary-roll section is not toggled together.'
 );
 
-$deployment = ui_test_file('DEPLOYMENT.md');
+$deployment = file_get_contents(dirname(__DIR__) . '/DEPLOYMENT.md');
 foreach ([
     '.securedice.env',
     'chmod 600',

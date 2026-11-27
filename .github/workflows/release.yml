@@ -33,7 +33,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION="$(tr -d '\r\n' < VERSION)"
+          VERSION="$(tr -d '\r\n' < securedice/VERSION)"
           if [[ -z "$VERSION" ]]; then
             echo "VERSION is empty" >&2
             exit 1
@@ -76,10 +76,6 @@ jobs:
           for test_file in tests/*-test.php; do
             php "$test_file"
           done
-
-      - name: Install production email dependency
-        shell: bash
-        run: composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
 
       - name: Build ZIP
         shell: bash

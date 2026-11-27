@@ -9,10 +9,10 @@ You need:
 - A DreamHost Shell user assigned to `rpglibrary.org`.
 - PHP 8.1 or newer with PDO MySQL and Sodium.
 - A fully hosted DreamHost mailbox for SMTP authentication, such as `webmaster@rpglibrary.org`.
-- The current `SecureDice-<version>.zip` from GitHub Releases.
+- The `securedice/` directory from Git or the current `SecureDice-<version>.zip` from GitHub Releases.
 - SSH or DreamHost File Manager access.
 
-Release ZIPs include PHPMailer and its production autoloader. A deployment from a Git source checkout must run `composer install --no-dev --optimize-autoloader` before use.
+The application directory includes the theme assets and PHPMailer.
 
 ## 1. Prepare MySQL
 
@@ -20,13 +20,13 @@ Use the existing `rpglibrary_org` database on `db.rpglibrary.org`. Secure Dice 2
 
 ## 2. Install the release
 
-Extract the release beneath the site's public `software` directory so that the application entry point is:
+Copy the entire `securedice/` directory, including `.htaccess`, into the site's public `standalone/` directory. The application entry point is
 
 ```text
-/home/YOUR_DREAMHOST_USER/rpglibrary.org/software/securedice/securedice.php
+/home/YOUR_DREAMHOST_USER/rpglibrary.org/standalone/securedice/securedice.php
 ```
 
-Do not upload a completed `.securedice.env` into this directory. The distributed `.securedice.env.example` contains placeholders only.
+For an existing DreamHost installation, reuse its private configuration, database, and scheduled worker. For a development copy, set `SECUREDICE_CONFIG_PATH` for web requests and CLI jobs to a private file with a separate database and the development URL in `SECUREDICE_BASE_URL`.
 
 ## 3. Create the private configuration
 
@@ -52,7 +52,7 @@ SECUREDICE_DB_NAME="rpglibrary_org"
 SECUREDICE_DB_USER="REPLACE_WITH_MYSQL_USER"
 SECUREDICE_DB_PASSWORD="REPLACE_WITH_MYSQL_PASSWORD"
 SECUREDICE_SECRET="REPLACE_WITH_THE_GENERATED_64_HEXADECIMAL_CHARACTERS"
-SECUREDICE_BASE_URL="https://www.rpglibrary.org/software/securedice"
+SECUREDICE_BASE_URL="https://www.rpglibrary.org/standalone/securedice"
 
 SECUREDICE_SMTP_HOST="smtp.dreamhost.com"
 SECUREDICE_SMTP_PORT="587"
@@ -95,7 +95,7 @@ A deployment cannot be considered migrated until this command reports the verifi
 Open:
 
 ```text
-https://www.rpglibrary.org/software/securedice/securedice.php
+https://www.rpglibrary.org/standalone/securedice/securedice.php
 ```
 
 Perform these checks in order:
@@ -106,7 +106,7 @@ Perform these checks in order:
 4. Run the queue worker manually without `--quiet`:
 
    ```shell
-   /usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/software/securedice/bin/process-email-queue.php --limit=20
+   /usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/standalone/securedice/bin/process-email-queue.php --limit=20
    ```
 
 5. Follow the confirmation email once and save the private settings link.
@@ -121,7 +121,7 @@ Do not use production recipient addresses until this sequence succeeds.
 In DreamHost's **Cron Jobs** panel, choose the same Shell user that owns the site, enable locking, select a one-minute custom schedule, and run:
 
 ```text
-/usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/software/securedice/bin/process-email-queue.php --limit=100 --quiet
+/usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/standalone/securedice/bin/process-email-queue.php --limit=100 --quiet
 ```
 
 `--quiet` suppresses the routine success line so DreamHost does not email cron output every minute. Failures still go to standard error and the PHP error log. Omit `--quiet` during initial testing.
@@ -143,7 +143,7 @@ Back up the private `.securedice.env` and the full MySQL database together. Use 
 1. Download the new versioned release ZIP.
 2. Read its release notes.
 3. Make and verify a database/configuration backup.
-4. Extract the release into a new sibling directory, not over the running installation.
+4. Extract the release and copy its `securedice/` directory to a new sibling of the running installation.
 5. Confirm `.securedice.env` remains outside both application directories.
 6. Rename the old directory to `securedice-previous` and the new directory to `securedice`.
 7. Open a stored verification link, roll once, and run the worker manually.

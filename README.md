@@ -15,7 +15,7 @@ Secure Dice is a free, account-free online dice roller for tabletop roleplaying 
 - **Recipient consent:** Email recipients confirm once and can pause, manage, or revoke delivery without an account.
 - **Queued email delivery:** Stored results are sent through authenticated SMTP with batching, retries, delivery history, and per-message unsubscribe links.
 
-Secure Dice is available at [RPG Library](https://www.rpglibrary.org/software/securedice/).
+Secure Dice is available at [RPG Library](https://www.rpglibrary.org/standalone/securedice/).
 
 ## Download
 
@@ -115,28 +115,29 @@ Secure Dice encodes roll settings in ordinary query parameters so presets can be
 Example:
 
 ```text
-https://www.rpglibrary.org/software/securedice/securedice.php?aq=7&as=4&dt=5&ad=highest&sdt=1
+https://www.rpglibrary.org/standalone/securedice/securedice.php?aq=7&as=4&dt=5&ad=highest&sdt=1
 ```
 
 ## Installation
 
 For a production installation, including DreamHost setup, first-run testing, cron, backups, upgrades, rollback, and lost-secret recovery, follow [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Place the repository files in a PHP-enabled web directory and direct users to `securedice.php`. The included `.htaccess` makes `securedice.php` the default page on Apache and redirects explicit requests for `index.php`.
+Copy the entire `securedice/` directory from Git or the release ZIP into a PHP-enabled web directory, including `.htaccess`. Open `securedice.php` in the deployed directory. The included `.htaccess` makes `securedice.php` the default page on Apache and redirects explicit requests for `index.php`.
 
 Secure Dice requires:
 
 - PHP with `random_int()`, session support, Sodium, PDO, and the PDO MySQL driver.
-- Composer for source installations. Release ZIPs already include production dependencies.
 - A web server capable of running PHP.
 - Browser cookies for the short-lived session that transfers a roll to its results page.
-- Access to the `rpglibrary_org` MySQL database on `db.rpglibrary.org`.
+- Access to the configured MySQL database.
 
 Secure Dice creates its `sd2_` MySQL tables in the configured database. Legacy rolls are kept separately in `sd2_legacy_rolls`; they cannot acquire Secure Dice 2 authentication retroactively.
 
+The directory includes the theme assets and the [PHPMailer 7.1.1](https://github.com/PHPMailer/PHPMailer/tree/v7.1.1) SMTP classes.
+
 ### Private configuration
 
-The repository includes `.securedice.env.example`, a documented template containing every supported setting. Copy it to `.securedice.env` in the hosting user's home directory, edit the private copy, and restrict it to the account owner:
+The application directory includes `.securedice.env.example`, a documented template containing every supported setting. From the application directory, copy it to `.securedice.env` in the hosting user's home directory, edit the private copy, and restrict it to the account owner:
 
 ```shell
 cp .securedice.env.example "$HOME/.securedice.env"
@@ -171,12 +172,6 @@ SECUREDICE_SECRET=<64 hexadecimal characters>
 
 Never commit this value. Back it up as carefully as the database and do not rotate it casually: it authenticates stored results and keys address encryption, private fingerprints, and rate-limit buckets. Replacing it makes existing results fail authentication and existing encrypted recipient records unreadable.
 
-Install PHPMailer when deploying directly from a source checkout:
-
-```shell
-composer install --no-dev --optimize-autoloader
-```
-
 Configure the public application URL and authenticated SMTP transport in the private file:
 
 ```text
@@ -205,12 +200,12 @@ The worker logs operational details to the PHP error log without returning SMTP 
 
 The example configuration uses the existing fully hosted `webmaster@rpglibrary.org` mailbox for SMTP authentication and the forward-only `securedice@rpglibrary.org` as the visible From address. Its replies continue to forward to the configured destination. DreamHost SMTP uses `smtp.dreamhost.com`, port `587`, and `starttls`; test both sending and a reply.
 
-Upload a release ZIP or source checkout beneath the domain, but keep `.securedice.env` directly under `/home/YOUR_DREAMHOST_USER/` rather than under `rpglibrary.org/`. The template's opening comment contains the corresponding copy, permission, directory, and secret-generation commands.
+Copy `securedice/` into the site’s `standalone/` directory. Keep the existing private `.securedice.env` directly under `/home/YOUR_DREAMHOST_USER/`. The template's opening comment contains the corresponding copy, permission, directory, and secret-generation commands.
 
 Create the queue worker in DreamHost's **Cron Jobs** panel, select the website's Shell user, enable locking, and run it every minute. Replace the username and installation path in this command:
 
 ```text
-/usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/software/securedice/bin/process-email-queue.php --limit=100 --quiet
+/usr/local/php84/bin/php /home/YOUR_DREAMHOST_USER/rpglibrary.org/standalone/securedice/bin/process-email-queue.php --limit=100 --quiet
 ```
 
 Omit `--quiet` while initially testing so the worker prints a short status line. In scheduled operation, `--quiet` suppresses routine success output while errors still reach standard error and the PHP error log.
@@ -236,7 +231,7 @@ php tests/security-test.php
 
 ## Versioning
 
-Secure Dice uses `2.0.(build number)` versions. The tracked pre-commit hook sets the build number to the number of the commit being created and records the complete version in `VERSION`. The page footers read both the version and its last-updated date from that file.
+Secure Dice uses `2.0.(build number)` versions. The tracked pre-commit hook sets the build number to the number of the commit being created and records the complete version in `securedice/VERSION`. The page footers read both the version and its last-updated date from that file.
 
 Configure a new clone to use the hook with:
 

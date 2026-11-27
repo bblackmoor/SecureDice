@@ -8,7 +8,7 @@ securedice_test_reset();
 putenv('SECUREDICE_SECRET=' . str_repeat('51', 32));
 putenv('SECUREDICE_BASE_URL=https://dice.example.test');
 
-require_once dirname(__DIR__) . '/smtp.php';
+require_once dirname(__DIR__) . '/securedice/smtp.php';
 
 function email_test_assert(bool $condition, string $message): void
 {

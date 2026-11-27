@@ -11,7 +11,7 @@ function security_test_assert(bool $condition, string $message): void
 
 function security_test_file(string $relativePath): string
 {
-    $contents = file_get_contents(dirname(__DIR__) . '/' . $relativePath);
+    $contents = file_get_contents(dirname(__DIR__) . '/securedice/' . $relativePath);
 
     if (!is_string($contents)) {
         throw new RuntimeException("Could not read {$relativePath}.");
@@ -63,7 +63,7 @@ foreach (['confirm.php', 'recover-recipient.php'] as $entry) {
     );
 }
 
-foreach (glob(dirname(__DIR__) . '/*.php') ?: [] as $path) {
+foreach (glob(dirname(__DIR__) . '/securedice/*.php') ?: [] as $path) {
     $contents = file_get_contents($path);
     security_test_assert(
         !is_string($contents) || preg_match('/\son[a-z]+\s*=/i', $contents) !== 1,

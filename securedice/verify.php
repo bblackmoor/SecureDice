@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib.php';
+require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/storage.php';
 
 send_security_headers();
@@ -89,12 +90,16 @@ http_response_code($statusCode);
     <meta name="referrer" content="no-referrer">
     <link rel="stylesheet" href="securedice.base.css">
     <link rel="stylesheet" href="securedice.mobile.css">
+    <?php rpg_site_assets(); ?>
+    <link rel="stylesheet" href="rpglibrary.css">
 </head>
-<body>
+<body class="rpg-standalone rpg-secure-dice">
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
-<header class="site-header" role="banner">
+<?php rpg_site_header(); ?>
+<div class="rpg-content sd2-document">
+<div class="site-header">
     <div class="site-header-inner">
         <div class="site-title-wrap">
             <h1 class="site-title">Secure Dice</h1>
@@ -106,7 +111,7 @@ http_response_code($statusCode);
         </div>
         <p class="site-subtitle">Retrieve the server's authoritative copy of a stored dice result.</p>
     </div>
-</header>
+</div>
 
 <main id="main-content" tabindex="-1">
     <section class="card verification-status <?= $statusKind === 'prompt' ? 'is-prompt' : 'is-error' ?>" aria-labelledby="verification-title" <?= $statusKind === 'prompt' ? '' : 'role="alert"' ?>>
@@ -138,7 +143,7 @@ http_response_code($statusCode);
     <p><a class="sd2-action-btn neutral inline-action" href="securedice.php">Roll Dice</a></p>
 </main>
 
-<footer class="site-footer" role="contentinfo">
+<div class="site-footer">
     Copyright &copy; 2005-2026 Brandon Blackmoor
     <a href="mailto:bblackmoor@blackgate.net?subject=Secure%20Dice">&lt;bblackmoor@blackgate.net&gt;</a><br>
     Licensed under the GNU General Public License v3.0:
@@ -146,7 +151,9 @@ http_response_code($statusCode);
     Source: <a href="https://github.com/bblackmoor/securedice">https://github.com/bblackmoor/securedice</a><br>
     Last updated: <?= h(app_updated_date()) ?>
     (version <?= h(app_version()) ?>)
-</footer>
+</div>
+</div>
+<?php rpg_site_footer(); ?>
 
 </body>
 </html>

@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/mysql-test-bootstrap.php';
 securedice_test_reset();
 putenv('SECUREDICE_SECRET=' . str_repeat('33', 32));
-require_once dirname(__DIR__) . '/storage.php';
+require_once dirname(__DIR__) . '/securedice/storage.php';
 
 $db = result_storage_connection();
 $db->exec('CREATE TABLE secure_dice (
@@ -23,7 +23,7 @@ $insert->execute([1, 4, str_repeat('a', 32), 'Roll 4d6: 1 + 2 + 3 + 4']);
 $insert->execute([12, 2, str_repeat('b', 32), "Roll: ñ + 4\n"]);
 
 $run = escapeshellarg(PHP_BINARY) . ' '
-    . escapeshellarg(dirname(__DIR__) . '/bin/migrate-legacy-mysql.php') . ' --execute';
+    . escapeshellarg(dirname(__DIR__) . '/securedice/bin/migrate-legacy-mysql.php') . ' --execute';
 $db->exec("INSERT INTO sd2_legacy_rolls (old_id, dice_rolled, legacy_hash, results)
     VALUES (1, 4, '" . str_repeat('a', 32) . "', 'corrupted copy')");
 exec($run . ' 2>&1', $failedOutput, $failedStatus);
