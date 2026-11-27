@@ -2,7 +2,7 @@
 
 ## Deploy the application
 
-1. Use PHP 8.1 or later with sessions, PDO MySQL, and Sodium. For SMTP over TLS, enable OpenSSL.
+1. Use PHP 8.1 or later with sessions, Ctype, PDO MySQL, and Sodium. For SMTP over TLS, enable OpenSSL.
 2. Copy the entire `securedice/` directory to your HTTPS site, including `.htaccess`. The directory includes the theme and mailer. On Unix, `755` for application directories and `644` for application files are typical. The web server needs to read these files and traverse the directories. It can do both with the application files owned by the deployment account.
 3. Set `securedice.php` as the directory index, or open it directly. Apache can use the included `.htaccess`. On other servers, disable directory listings and deny HTTP access to dotfiles and the `bin/` and `vendor/` directories.
 
@@ -22,6 +22,16 @@ SECUREDICE_SECRET="YOUR_GENERATED_64_HEX_CHARACTERS"
 ```
 
 Generate the secret once with `php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'`. Keep it with your database backups so existing rolls and recipient records remain usable.
+
+## Initialize the schema manually (fallback)
+
+If automatic initialization fails, run the same initializer from the `securedice/` directory. Point it at a private configuration file for the application's database. If the web account lacks schema creation privileges, use a separate private file for an account with the grants listed above.
+
+```sh
+SECUREDICE_CONFIG_PATH=/path/to/private-config php -r 'require "storage.php"; initialize_result_storage(securedice_mysql_connection());'
+```
+
+Then make a test roll using the regular web configuration.
 
 ## Enable email delivery (optional)
 
