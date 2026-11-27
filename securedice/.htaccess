@@ -2,6 +2,8 @@ DirectoryIndex securedice.php
 Options -Indexes -MultiViews
 
 RewriteEngine On
-RewriteRule ^index\.php$ securedice.php [R=301,L]
+# Redirect within the current URL directory and retain the roll preset query.
+RewriteCond %{REQUEST_URI} ^(/(?:[^/]+/)*)index\.php$
+RewriteRule ^index\.php$ %1securedice.php [R=301,L]
 RewriteRule ^(?:vendor|bin)(?:/|$) - [F,L]
 RewriteRule (^|/)\. - [F,L]
